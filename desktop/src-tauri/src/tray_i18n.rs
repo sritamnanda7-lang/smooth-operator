@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! Tray menu internationalization
 //!
 //! Everything is auto-generated at compile time by build.rs from the
@@ -55,16 +57,11 @@ mod tests {
     #[test]
     fn resolves_locale_fallbacks() {
         for (locale, expected) in [
-            ("zh-Hant-TW", "zh-TW"),
-            ("zh-Hant-HK", "zh-TW"),
-            ("zh-HK", "zh-TW"),
-            ("zh-MO", "zh-TW"),
-            ("ZH-TW", "zh-TW"),
-            ("zh_Hant_TW", "zh-TW"),
-            ("zh-Hans-CN", "zh"),
-            ("yue-Hant-HK", "zh-TW"),
-            ("yue-Hans-CN", "zh"),
-            ("fr-FR", "fr"),
+            // Only English ships (other locales are stripped), so every
+            // locale, known or not, falls back to it.
+            ("zh-Hant-TW", "en"),
+            ("fr-FR", "en"),
+            ("ZH-TW", "en"),
             ("xx-YY", "en"),
         ] {
             assert_eq!(

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! Notices: how Handy reports a failure that happens in the background.
 //! [`raise`] is the one way to do it; see "Error notices" in `AGENTS.md` for
 //! how to add one.
@@ -45,9 +47,7 @@ pub enum NoticeCode {
     MicPermissionDenied,
     RecordingFailed,
     ModelLoadFailed,
-    PostProcessFailed,
     FileTranscriptionFailed,
-    FilePostProcessFailed,
 }
 
 impl NoticeCode {
@@ -60,7 +60,6 @@ impl NoticeCode {
             | Self::RecordingFailed
             | Self::ModelLoadFailed
             | Self::FileTranscriptionFailed => NoticeLevel::Error,
-            Self::PostProcessFailed | Self::FilePostProcessFailed => NoticeLevel::Warning,
         }
     }
 
@@ -73,9 +72,7 @@ impl NoticeCode {
             Self::MicPermissionDenied => &strings.mic_permission_denied_title,
             Self::RecordingFailed => &strings.recording_failed_title,
             Self::ModelLoadFailed => &strings.model_load_failed_title,
-            Self::PostProcessFailed => &strings.post_process_failed_title,
             Self::FileTranscriptionFailed => &strings.file_transcription_failed_title,
-            Self::FilePostProcessFailed => &strings.file_post_process_failed_title,
         }
     }
 }
@@ -241,12 +238,12 @@ mod tests {
         let mut active = Vec::new();
         insert(&mut active, dictation(NoticeCode::PasteFailed));
         insert(&mut active, file(NoticeCode::FileTranscriptionFailed));
-        insert(&mut active, dictation(NoticeCode::PostProcessFailed));
+        insert(&mut active, dictation(NoticeCode::RecordingFailed));
 
         assert_eq!(
             active,
             vec![
-                dictation(NoticeCode::PostProcessFailed),
+                dictation(NoticeCode::RecordingFailed),
                 file(NoticeCode::FileTranscriptionFailed),
             ]
         );
@@ -265,7 +262,7 @@ mod tests {
     fn dismissing_spares_a_newer_notice_from_the_same_source() {
         let mut active = vec![dictation(NoticeCode::PasteFailed)];
 
-        let stale = Some(NoticeCode::PostProcessFailed);
+        let stale = Some(NoticeCode::RecordingFailed);
         assert!(!remove(&mut active, NoticeSource::Dictation, stale));
         assert_eq!(active, vec![dictation(NoticeCode::PasteFailed)]);
 
@@ -280,7 +277,9 @@ mod tests {
         assert_eq!(headline(&active), None);
 
         insert(&mut active, file(NoticeCode::FileTranscriptionFailed));
-        insert(&mut active, dictation(NoticeCode::PostProcessFailed));
+        let mut warning = dictation(NoticeCode::RecordingFailed);
+        warning.level = NoticeLevel::Warning;
+        insert(&mut active, warning);
         assert_eq!(
             headline(&active),
             Some(&file(NoticeCode::FileTranscriptionFailed))

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import type { TFunction } from "i18next";
 import { platform } from "@tauri-apps/plugin-os";
 import type { NoticeCode } from "@/bindings";
@@ -35,16 +37,8 @@ const NOTICE_DISPLAY: Record<NoticeCode, NoticeDisplay> = {
     title: "errors.modelLoadFailedTitle",
     explanation: (t) => t("errors.modelLoadFailed"),
   },
-  PostProcessFailed: {
-    title: "errors.postProcessFailedTitle",
-    explanation: (t) => t("errors.postProcessFailed"),
-  },
   FileTranscriptionFailed: {
     title: "errors.fileTranscriptionFailedTitle",
-  },
-  FilePostProcessFailed: {
-    title: "errors.filePostProcessFailedTitle",
-    explanation: (t) => t("errors.filePostProcessFailed"),
   },
 };
 

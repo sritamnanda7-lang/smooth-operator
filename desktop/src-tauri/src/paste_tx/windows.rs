@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! Windows reliable paste.
 //!
 //! Publishes the transcript as a *delayed-render* clipboard format
@@ -12,23 +14,20 @@
 //! need a message pump, so the whole transaction lives on a dedicated worker
 //! thread. The calling thread only sends the paste chord once the worker
 //! signals the transcript is published, then returns; the wait, guarded
-//! restore and auto-submit all finish on the worker.
+//! and restore all finish on the worker.
 
 use std::sync::{mpsc::Sender, Arc, Mutex, Once};
 use std::thread;
 use std::time::Instant;
 
 use log::{error, info, warn};
-use tauri::Manager;
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{
     SetLastError, ERROR_SUCCESS, HANDLE, HGLOBAL, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM,
 };
 
 use super::{evaluate, send_chord, TxState, WaitDecision};
-use crate::clipboard::send_return_key;
-use crate::input::EnigoState;
-use crate::settings::{AutoSubmitKey, ClipboardHandling, PasteMethod};
+use crate::settings::{ClipboardHandling, PasteMethod};
 use windows::Win32::Foundation::GlobalFree;
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardOwner,
@@ -71,8 +70,6 @@ pub(super) struct WinTxShared {
     saved_bitmap: Mutex<Option<usize>>,
     sequence: Mutex<u32>,
     app_handle: tauri::AppHandle,
-    auto_submit: bool,
-    auto_submit_key: AutoSubmitKey,
     /// ClipboardHandling::CopyToClipboard — settle by leaving the transcript
     /// on the clipboard as plain text instead of restoring the snapshot.
     preserve_transcript: bool,
@@ -88,29 +85,6 @@ fn wide(s: &str) -> Vec<u16> {
 
 unsafe fn shared_ptr(hwnd: HWND) -> *const WinTxShared {
     GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const WinTxShared
-}
-
-/// Sends the auto-submit Enter. Uses `try_lock` because the paste caller may
-/// currently hold the enigo lock while waiting for this worker.
-fn send_auto_submit(shared: &WinTxShared) {
-    {
-        let mut st = match shared.state.lock() {
-            Ok(st) => st,
-            Err(_) => return,
-        };
-        if st.auto_submit_sent {
-            return;
-        }
-        st.auto_submit_sent = true;
-    }
-    if let Some(enigo_state) = shared.app_handle.try_state::<EnigoState>() {
-        match enigo_state.0.try_lock() {
-            Ok(mut enigo) => {
-                let _ = send_return_key(&mut enigo, shared.auto_submit_key);
-            }
-            Err(_) => warn!("[reliable-paste] skipping auto-submit: input state busy"),
-        }
-    }
 }
 
 /// Renders the promised transcript into the clipboard, which must already be
@@ -221,16 +195,12 @@ fn flush_pending() {
     let Some(previous) = previous else {
         return;
     };
-    let receipt = {
+    {
         let mut st = match previous.state.lock() {
             Ok(st) => st,
             Err(_) => return,
         };
         st.cancelled = true;
-        st.any_receipt_after_injection()
-    };
-    if previous.auto_submit && receipt {
-        send_auto_submit(&previous);
     }
     let sequence = *previous.sequence.lock().unwrap();
     let still_ours = unsafe { GetClipboardSequenceNumber() } == sequence;
@@ -454,12 +424,6 @@ fn on_timer(_hwnd: HWND, shared: &WinTxShared) {
         info!("[reliable-paste] settling: no read within timeout, restoring anyway");
     }
 
-    // Auto-submit only once the target demonstrably read the transcript;
-    // pressing Enter after an unconfirmed paste could submit stale content.
-    if shared.auto_submit && receipt {
-        send_auto_submit(shared);
-    }
-
     let sequence = *shared.sequence.lock().unwrap();
     let still_ours = !ownership_lost && unsafe { GetClipboardSequenceNumber() } == sequence;
     if still_ours {
@@ -576,8 +540,6 @@ pub(super) fn run(
     app_handle: &tauri::AppHandle,
     paste_method: &PasteMethod,
     enigo: &mut enigo::Enigo,
-    auto_submit: bool,
-    auto_submit_key: AutoSubmitKey,
     clipboard_handling: ClipboardHandling,
 ) -> Result<(), String> {
     let shared = Arc::new(WinTxShared {
@@ -587,8 +549,6 @@ pub(super) fn run(
         saved_bitmap: Mutex::new(None),
         sequence: Mutex::new(0),
         app_handle: app_handle.clone(),
-        auto_submit,
-        auto_submit_key,
         preserve_transcript: clipboard_handling == ClipboardHandling::CopyToClipboard,
     });
 

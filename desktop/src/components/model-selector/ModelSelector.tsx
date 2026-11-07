@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React, { useState, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { listen } from "@tauri-apps/api/event";
@@ -5,10 +7,7 @@ import { commands } from "@/bindings";
 import { getTranslatedModelName } from "../../lib/utils/modelTranslation";
 import { useModelStore } from "../../stores/modelStore";
 import { LANGUAGE_DETECTOR_ID } from "../../hooks/useLanguageDetector";
-import {
-  areModelsLocked,
-  useModelsLocked,
-} from "../../stores/transcriptionJobsStore";
+import { areModelsLocked, useModelsLocked } from "@/so/modelsLocked";
 import ModelStatusButton from "./ModelStatusButton";
 import ModelDropdown from "./ModelDropdown";
 import DownloadProgressDisplay from "./DownloadProgressDisplay";

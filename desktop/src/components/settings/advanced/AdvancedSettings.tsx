@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { ShowOverlay } from "../ShowOverlay";
@@ -10,11 +12,7 @@ import { ShowTrayIcon } from "../ShowTrayIcon";
 import { PasteMethodSetting } from "../PasteMethod";
 import { TypingToolSetting } from "../TypingTool";
 import { ClipboardHandlingSetting } from "../ClipboardHandling";
-import { AutoSubmit } from "../AutoSubmit";
-import { PostProcessingToggle } from "../PostProcessingToggle";
 import { AppendTrailingSpace } from "../AppendTrailingSpace";
-import { HistoryLimit } from "../HistoryLimit";
-import { RecordingRetentionPeriodSelector } from "../RecordingRetentionPeriod";
 import { ExperimentalToggle } from "../ExperimentalToggle";
 import { useSettings } from "../../../hooks/useSettings";
 import { KeyboardImplementationSelector } from "../debug/KeyboardImplementationSelector";
@@ -47,7 +45,6 @@ export const AdvancedSettings: React.FC = () => {
         <PasteMethodSetting descriptionMode="tooltip" grouped={true} />
         <TypingToolSetting descriptionMode="tooltip" grouped={true} />
         <ClipboardHandlingSetting descriptionMode="tooltip" grouped={true} />
-        <AutoSubmit descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
 
       <SettingsGroup title={t("settings.advanced.groups.transcription")}>
@@ -58,17 +55,8 @@ export const AdvancedSettings: React.FC = () => {
         <AppendTrailingSpace descriptionMode="tooltip" grouped={true} />
       </SettingsGroup>
 
-      <SettingsGroup title={t("settings.advanced.groups.history")}>
-        <HistoryLimit descriptionMode="tooltip" grouped={true} />
-        <RecordingRetentionPeriodSelector
-          descriptionMode="tooltip"
-          grouped={true}
-        />
-      </SettingsGroup>
-
       {experimentalEnabled && (
         <SettingsGroup title={t("settings.advanced.groups.experimental")}>
-          <PostProcessingToggle descriptionMode="tooltip" grouped={true} />
           <KeyboardImplementationSelector
             descriptionMode="tooltip"
             grouped={true}

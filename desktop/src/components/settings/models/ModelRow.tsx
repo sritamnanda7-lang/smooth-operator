@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Loader2, Lock, Trash2, X } from "lucide-react";
@@ -7,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { ModelTableRow } from "@/components/shared/modelTable/ModelTableRow";
 import { formatModelSize } from "@/lib/utils/format";
 import { useModelStore } from "@/stores/modelStore";
-import { useModelsLocked } from "@/stores/transcriptionJobsStore";
+import { useModelsLocked } from "@/so/modelsLocked";
 import {
   cancelDownload,
   pickModel,

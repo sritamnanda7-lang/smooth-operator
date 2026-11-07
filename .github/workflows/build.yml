@@ -1,0 +1,198 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
+# Build and test on macOS (arm64) and Windows (x64). Unsigned dev builds only.
+# No secrets, no write permissions, no pull_request_target.
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: "1.99.1"
+  BUN_VERSION: "1.4.4"
+
+jobs:
+  build-mac:
+    name: build-mac
+    runs-on: macos-latest # Apple Silicon (arm64)
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # tests and scripts/fork-size.sh diff against the handy-v0.10.0-base tag
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: |
+            desktop/src-tauri -> target
+            tests/strip-checks -> target
+
+      - name: Install JS dependencies (repo root and desktop)
+        run: |
+          bun install --frozen-lockfile
+          bun install --frozen-lockfile --cwd desktop
+
+      - name: Strip checks (cargo test, file-reading checks)
+        run: cargo test --locked --manifest-path tests/strip-checks/Cargo.toml
+
+      - name: Vitest (SPDX headers and UI strip)
+        run: bunx vitest run
+
+      - name: Type check and lint (desktop UI)
+        working-directory: desktop
+        run: |
+          bunx tsc --noEmit
+          bun run lint
+
+      - name: Handy Rust tests
+        working-directory: desktop/src-tauri
+        run: cargo test --locked
+
+      - name: Build (unsigned, dmg)
+        working-directory: desktop
+        run: bun run tauri build --bundles dmg -- --locked
+
+      - name: Upload dmg
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smooth-operator-mac-dmg
+          path: desktop/src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+          retention-days: 14
+
+  build-win:
+    name: build-win
+    runs-on: windows-latest # x64
+    timeout-minutes: 120
+    steps:
+      - name: Enable long paths
+        shell: pwsh
+        run: |
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name "LongPathsEnabled" -Value 1 -PropertyType DWORD -Force
+          git config --system core.longpaths true
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      # transcribe-cpp builds the ggml Vulkan backend on Windows x64 with CMake.
+      - name: Install Vulkan SDK
+        uses: humbletim/install-vulkan-sdk@30ba978f977e81b72d091fc8888feb1fb26f9aff # v1.2
+        with:
+          version: 1.4.309.0
+          cache: true
+
+      - name: Check CMake
+        shell: pwsh
+        run: cmake --version
+
+      # ggml-vulkan needs the SPIRV-Headers CMake package; the runner's vcpkg provides it.
+      - name: Install SPIRV-Headers
+        shell: pwsh
+        run: |
+          vcpkg install spirv-headers:x64-windows
+          if ($LASTEXITCODE -ne 0) { throw "vcpkg install spirv-headers failed" }
+          $prefix = "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows" -replace '\\','/'
+          $combined = if ($env:CMAKE_PREFIX_PATH) { "$prefix;$env:CMAKE_PREFIX_PATH" } else { $prefix }
+          Add-Content $env:GITHUB_ENV "CMAKE_PREFIX_PATH=$combined"
+
+      # Ship the VC++ runtime next to the exe so a fresh Windows 11 can start the app.
+      - name: Locate VC++ runtime for app-local bundling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsRoot = & $vswhere -latest -products * -property installationPath
+          $ver = (Get-Content (Join-Path $vsRoot "VC\Auxiliary\Build\Microsoft.VCRedistVersion.default.txt")).Trim()
+          $arch = Join-Path $vsRoot "VC\Redist\MSVC\$ver\x64"
+          $crt = Get-ChildItem $arch -Directory -Filter "Microsoft.VC*.CRT" | Sort-Object Name | Select-Object -Last 1
+          $omp = Get-ChildItem $arch -Directory -Filter "Microsoft.VC*.OpenMP" | Sort-Object Name | Select-Object -Last 1
+          if (-not $crt -or -not $omp) { throw "VC++ redist dirs not found under $arch" }
+          Add-Content $env:GITHUB_ENV "HANDY_VC_REDIST_DIRS=$($crt.FullName);$($omp.FullName)"
+
+      - name: Install JS dependencies (repo root and desktop)
+        run: |
+          bun install --frozen-lockfile
+          bun install --frozen-lockfile --cwd desktop
+
+      - name: Handy Rust tests
+        working-directory: desktop/src-tauri
+        run: cargo test --locked
+
+      - name: Build (unsigned, nsis)
+        working-directory: desktop
+        run: bun run tauri build --bundles nsis -- --locked
+
+      - name: Upload installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: smooth-operator-win-nsis
+          path: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      # Silent per-user install: no admin, no UI. Fails the job if the exe is missing.
+      - name: Install smoke test (silent, per-user)
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Smooth Operator\smooth-operator.exe'
+          if (-not (Test-Path $exe)) { throw "installed exe not found: $exe" }
+          Add-Content $env:GITHUB_ENV "SO_EXE=$exe"
+          Write-Host "installed: $exe"
+
+      # Gate 4 is indicative on CI runners (shared, noisy); real numbers come from the tester.
+      - name: Idle RAM and CPU (indicative)
+        continue-on-error: true
+        shell: pwsh
+        run: ./scripts/idle-ram.ps1 -CI -ExePath $env:SO_EXE
+
+      - name: Uninstall
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $u = Join-Path $env:LOCALAPPDATA 'Smooth Operator\uninstall.exe'
+          if (Test-Path $u) { Start-Process -FilePath $u -ArgumentList '/S' -Wait }

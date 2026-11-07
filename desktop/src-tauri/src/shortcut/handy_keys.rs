@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! Handy-keys based keyboard shortcut implementation
 //!
 //! This module provides an alternative to Tauri's global-shortcut plugin
@@ -123,10 +125,8 @@ impl HandyKeysState {
             // Check for hotkey events (non-blocking)
             while let Some(event) = manager.try_recv() {
                 if let Some((binding_id, hotkey_string)) = hotkey_to_binding.get(&event.id) {
-                    debug!(
-                        "handy-keys event: binding={}, hotkey={}, state={:?}",
-                        binding_id, hotkey_string, event.state
-                    );
+                    // Binding id and state only; never the key itself.
+                    debug!("handy-keys event: binding={}, state={:?}", binding_id, event.state);
                     let is_pressed = event.state == HotkeyState::Pressed;
                     handle_shortcut_event(&app, binding_id, hotkey_string, is_pressed);
                 }
@@ -198,10 +198,7 @@ impl HandyKeysState {
         binding_to_hotkey.insert(binding_id.to_string(), id);
         hotkey_to_binding.insert(id, (binding_id.to_string(), hotkey_string.to_string()));
 
-        debug!(
-            "Registered handy-keys shortcut: {} -> {:?}",
-            binding_id, hotkey
-        );
+        debug!("Registered handy-keys shortcut: {}", binding_id);
         Ok(())
     }
 
@@ -427,10 +424,6 @@ pub fn init_shortcuts(app: &AppHandle) -> Result<(), String> {
     // Register all bindings except cancel (which is dynamic)
     for (id, default_binding) in default_bindings {
         if id == "cancel" {
-            continue;
-        }
-        // Skip post-processing shortcut when the feature is disabled
-        if id == "transcribe_with_post_process" && !user_settings.post_process_enabled {
             continue;
         }
 

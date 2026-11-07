@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! System tray icon and menu.
 //!
 //! The tray is driven by a single *desired state* snapshot ([`TrayDesired`])
@@ -20,7 +22,6 @@
 //! a hidden tray relies on tray-icon recreating it from the last applied
 //! icon/menu/tooltip, so those must only ever be set through the applier.
 
-use crate::managers::history::{HistoryEntry, HistoryManager};
 use crate::managers::model::{ModelInfo, ModelManager};
 use crate::managers::transcription::TranscriptionManager;
 use crate::notices::{self, NoticeCode};
@@ -35,7 +36,6 @@ use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIcon;
 use tauri::{AppHandle, Manager, Theme};
-use tauri_plugin_clipboard_manager::ClipboardExt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TrayIconState {
@@ -69,7 +69,6 @@ struct MenuInputs {
     /// `(id, name)` of downloaded models, sorted by name.
     downloaded_models: Vec<(String, String)>,
     locale: String,
-    update_checks_enabled: bool,
     /// The language submenu, when the selected model has languages to pick.
     language: Option<LanguageMenu>,
 }
@@ -392,7 +391,6 @@ fn compute_desired(app: &AppHandle, icon_state: TrayIconState) -> TrayDesired {
             selected_model: settings.selected_model,
             downloaded_models,
             locale: settings.app_language,
-            update_checks_enabled: settings.update_checks_enabled,
             language,
         },
     }
@@ -616,16 +614,14 @@ pub fn tray_tooltip() -> String {
 
 fn version_label() -> String {
     if cfg!(debug_assertions) {
-        format!("Handy v{} (Dev)", env!("CARGO_PKG_VERSION"))
+        format!("Smooth Operator v{} (Dev)", env!("CARGO_PKG_VERSION"))
     } else {
-        format!("Handy v{}", env!("CARGO_PKG_VERSION"))
+        format!("Smooth Operator v{}", env!("CARGO_PKG_VERSION"))
     }
 }
 
 /// Builds the tray menu and tooltip for the given inputs. Pure with respect
-/// to app state: everything it depends on is in `inputs`, plus the
-/// process-constant `HANDY_DISABLE_UPDATER` env flag behind
-/// `update_checks_forced_disabled()`, which cannot change during a run.
+/// to app state: everything it depends on is in `inputs`.
 fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri::Wry>, String)> {
     let strings = get_tray_translations(Some(inputs.locale.clone()));
 
@@ -675,20 +671,6 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
         true,
         settings_accelerator,
     )?;
-    let check_updates_i = MenuItem::with_id(
-        app,
-        "check_updates",
-        &strings.check_updates,
-        inputs.update_checks_enabled,
-        None::<&str>,
-    )?;
-    let copy_last_transcript_i = MenuItem::with_id(
-        app,
-        "copy_last_transcript",
-        &strings.copy_last_transcript,
-        true,
-        None::<&str>,
-    )?;
     let quit_i = MenuItem::with_id(app, "quit", &strings.quit, true, quit_accelerator)?;
     let separator = || PredefinedMenuItem::separator(app);
 
@@ -701,10 +683,7 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
                 &separator()?,
                 &cancel_i,
                 &separator()?,
-                &copy_last_transcript_i,
-                &separator()?,
                 &settings_i,
-                &check_updates_i,
                 &separator()?,
                 &quit_i,
             ],
@@ -740,33 +719,20 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
             &[
                 &version_i,
                 &separator()?,
-                &copy_last_transcript_i,
-                &separator()?,
                 &model_submenu,
                 &unload_model_i,
                 &separator()?,
                 &settings_i,
-                &check_updates_i,
                 &separator()?,
                 &quit_i,
             ],
         )?;
-        // Right below the model submenu: version, separator, copy, separator, model.
+        // Right below the model submenu: version, separator, model.
         if let Some(language) = &inputs.language {
-            menu.insert(&language_submenu(app, &strings, language)?, 5)?;
+            menu.insert(&language_submenu(app, &strings, language)?, 3)?;
         }
         menu
     };
-
-    // When update checks are forced off (e.g. HANDY_DISABLE_UPDATER, set by
-    // the Nix package), the item is dropped from the menu rather than shown
-    // disabled — it can never do anything in that case, and a disabled item
-    // still shifts every entry below it by one position. A manually-disabled
-    // toggle in Debug Settings keeps the old greyed-out behavior via the
-    // enabled flag.
-    if settings::update_checks_forced_disabled() {
-        menu.remove(&check_updates_i)?;
-    }
 
     // Both layouts start with [version, separator, ...]; slot the warnings in
     // right below the version line so they're the first actionable thing seen.
@@ -786,13 +752,6 @@ fn build_menu(app: &AppHandle, inputs: &MenuInputs) -> tauri::Result<(Menu<tauri
     }
 
     Ok((menu, tooltip))
-}
-
-fn last_transcript_text(entry: &HistoryEntry) -> &str {
-    entry
-        .post_processed_text
-        .as_deref()
-        .unwrap_or(&entry.transcription_text)
 }
 
 pub fn set_tray_visibility(app: &AppHandle, visible: bool) {
@@ -829,44 +788,12 @@ pub fn recreate_tray_icon(app: &AppHandle) {
     }
 }
 
-pub fn copy_last_transcript(app: &AppHandle) {
-    let history_manager = app.state::<Arc<HistoryManager>>();
-    let entry = match history_manager.get_latest_completed_entry() {
-        Ok(Some(entry)) => entry,
-        Ok(None) => {
-            warn!("No completed transcription history entries available for tray copy.");
-            return;
-        }
-        Err(err) => {
-            error!(
-                "Failed to fetch last completed transcription entry: {}",
-                err
-            );
-            return;
-        }
-    };
-
-    let text = last_transcript_text(&entry);
-    if text.trim().is_empty() {
-        warn!("Last completed transcription is empty; skipping tray copy.");
-        return;
-    }
-
-    if let Err(err) = app.clipboard().write_text(text) {
-        error!("Failed to copy last transcript to clipboard: {}", err);
-        return;
-    }
-
-    info!("Copied last transcript to clipboard via tray.");
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
-        get_icon_path, language_menu, last_transcript_text, load_tray_icon, AppTheme, MenuInputs,
+        get_icon_path, language_menu, load_tray_icon, AppTheme, MenuInputs,
         TrayDesired, TrayIconState,
     };
-    use crate::managers::history::HistoryEntry;
     use crate::managers::model::{ModelInfo, ModelSource};
     use crate::settings::{get_default_settings, AppSettings};
 
@@ -960,23 +887,6 @@ mod tests {
         );
     }
 
-    fn build_entry(transcription: &str, post_processed: Option<&str>) -> HistoryEntry {
-        HistoryEntry {
-            id: 1,
-            file_name: "handy-1.wav".to_string(),
-            timestamp: 0,
-            saved: false,
-            title: "Recording".to_string(),
-            transcription_text: transcription.to_string(),
-            post_processed_text: post_processed.map(|text| text.to_string()),
-            post_process_prompt: None,
-            post_process_requested: false,
-            source_name: None,
-            language: None,
-            language_source: None,
-        }
-    }
-
     fn inputs(busy: bool) -> MenuInputs {
         MenuInputs {
             busy,
@@ -987,21 +897,8 @@ mod tests {
             selected_model: "small".to_string(),
             downloaded_models: vec![("small".to_string(), "Small".to_string())],
             locale: "en".to_string(),
-            update_checks_enabled: true,
             language: None,
         }
-    }
-
-    #[test]
-    fn uses_post_processed_text_when_available() {
-        let entry = build_entry("raw", Some("processed"));
-        assert_eq!(last_transcript_text(&entry), "processed");
-    }
-
-    #[test]
-    fn falls_back_to_raw_transcription() {
-        let entry = build_entry("raw", None);
-        assert_eq!(last_transcript_text(&entry), "raw");
     }
 
     #[test]

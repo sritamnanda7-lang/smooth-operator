@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 use crate::input::{self, EnigoState};
 #[cfg(target_os = "linux")]
 use crate::settings::TypingTool;
-use crate::settings::{get_settings, AutoSubmitKey, ClipboardHandling, PasteMethod};
-use enigo::{Direction, Enigo, Key, Keyboard};
+use crate::settings::{get_settings, ClipboardHandling, PasteMethod};
+use enigo::Enigo;
 use log::info;
+#[cfg(target_os = "linux")]
 use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::sync::OnceLock;
@@ -720,36 +723,6 @@ fn send_key_combo_via_xdotool(paste_method: &PasteMethod) -> Result<(), String> 
     Ok(())
 }
 
-/// Pastes text by invoking an external script.
-/// The script receives the text to paste as a single argument.
-fn paste_via_external_script(text: &str, script_path: &str) -> Result<(), String> {
-    info!("Pasting via external script: {}", script_path);
-
-    // Do not capture the script's stdio. Wayland clipboard helpers such as
-    // wl-copy may fork a background selection daemon that inherits those file
-    // descriptors; waiting for captured output would then block until the
-    // clipboard selection is replaced instead of returning after the script
-    // itself exits.
-    use std::process::Stdio;
-    let status = Command::new(script_path)
-        .arg(text)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|e| format!("Failed to execute external script '{}': {}", script_path, e))?;
-
-    if !status.success() {
-        return Err(format!(
-            "External script '{}' failed with exit code {:?}",
-            script_path,
-            status.code()
-        ));
-    }
-
-    Ok(())
-}
-
 /// Types text directly by simulating individual key presses.
 fn paste_direct(
     text: &str,
@@ -768,53 +741,6 @@ fn paste_direct(
     with_enigo(app_handle, move |enigo| {
         input::paste_text_direct(enigo, &text)
     })
-}
-
-pub(crate) fn send_return_key(enigo: &mut Enigo, key_type: AutoSubmitKey) -> Result<(), String> {
-    match key_type {
-        AutoSubmitKey::Enter => {
-            enigo
-                .key(Key::Return, Direction::Press)
-                .map_err(|e| format!("Failed to press Return key: {}", e))?;
-            enigo
-                .key(Key::Return, Direction::Release)
-                .map_err(|e| format!("Failed to release Return key: {}", e))?;
-        }
-        AutoSubmitKey::CtrlEnter => {
-            enigo
-                .key(Key::Control, Direction::Press)
-                .map_err(|e| format!("Failed to press Control key: {}", e))?;
-            enigo
-                .key(Key::Return, Direction::Press)
-                .map_err(|e| format!("Failed to press Return key: {}", e))?;
-            enigo
-                .key(Key::Return, Direction::Release)
-                .map_err(|e| format!("Failed to release Return key: {}", e))?;
-            enigo
-                .key(Key::Control, Direction::Release)
-                .map_err(|e| format!("Failed to release Control key: {}", e))?;
-        }
-        AutoSubmitKey::CmdEnter => {
-            enigo
-                .key(Key::Meta, Direction::Press)
-                .map_err(|e| format!("Failed to press Meta/Cmd key: {}", e))?;
-            enigo
-                .key(Key::Return, Direction::Press)
-                .map_err(|e| format!("Failed to press Return key: {}", e))?;
-            enigo
-                .key(Key::Return, Direction::Release)
-                .map_err(|e| format!("Failed to release Return key: {}", e))?;
-            enigo
-                .key(Key::Meta, Direction::Release)
-                .map_err(|e| format!("Failed to release Meta/Cmd key: {}", e))?;
-        }
-    }
-
-    Ok(())
-}
-
-fn should_send_auto_submit(auto_submit: bool, paste_method: PasteMethod) -> bool {
-    auto_submit && paste_method != PasteMethod::None
 }
 
 /// Pastes `text` into the focused app. Call from a worker thread, never the main
@@ -854,26 +780,19 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
         PasteMethod::CtrlV | PasteMethod::CtrlShiftV | PasteMethod::ShiftInsert => {
             // Debug-gated receipt-sequenced paste (#502): restore the clipboard
             // after the target actually reads the transcript, not on a timer.
-            // On success it fully handles the paste (including auto-submit and
-            // clipboard handling) asynchronously; on failure fall through to
+            // On success it fully handles the paste (including clipboard handling) asynchronously; on failure fall through to
             // the legacy path untouched.
             #[cfg(any(target_os = "macos", target_os = "windows"))]
             if settings.reliable_paste {
                 // Runs entirely on the main thread, as it requires.
                 let (text, app) = (text.clone(), app_handle.clone());
-                let (auto_submit, auto_submit_key, clipboard_handling) = (
-                    settings.auto_submit,
-                    settings.auto_submit_key,
-                    settings.clipboard_handling,
-                );
+                let clipboard_handling = settings.clipboard_handling;
                 let reliable_result = with_enigo(&app_handle, move |enigo| {
                     crate::paste_tx::try_reliable_paste(
                         &text,
                         &app,
                         &paste_method,
                         enigo,
-                        auto_submit,
-                        auto_submit_key,
                         clipboard_handling,
                     )
                 });
@@ -891,24 +810,6 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
                 paste_delay_ms,
                 paste_delay_after_ms,
             )?
-        }
-        PasteMethod::ExternalScript => {
-            let script_path = settings
-                .external_script_path
-                .as_ref()
-                .filter(|p| !p.is_empty())
-                .ok_or("External script path is not configured")?;
-            paste_via_external_script(&text, script_path)?;
-        }
-    }
-
-    if should_send_auto_submit(settings.auto_submit, paste_method) {
-        std::thread::sleep(Duration::from_millis(50));
-        let auto_submit_key = settings.auto_submit_key;
-        if let Err(error) = with_enigo(&app_handle, move |enigo| {
-            send_return_key(enigo, auto_submit_key)
-        }) {
-            log::warn!("Paste succeeded, but auto-submit failed: {error}");
         }
     }
 
@@ -1021,25 +922,6 @@ e.g. 28:1 28:0 means pressing on the Enter button on a standard US keyboard.
     }
 
     #[test]
-    fn auto_submit_requires_setting_enabled() {
-        assert!(!should_send_auto_submit(false, PasteMethod::CtrlV));
-        assert!(!should_send_auto_submit(false, PasteMethod::Direct));
-    }
-
-    #[test]
-    fn auto_submit_skips_none_paste_method() {
-        assert!(!should_send_auto_submit(true, PasteMethod::None));
-    }
-
-    #[test]
-    fn auto_submit_runs_for_active_paste_methods() {
-        assert!(should_send_auto_submit(true, PasteMethod::CtrlV));
-        assert!(should_send_auto_submit(true, PasteMethod::Direct));
-        assert!(should_send_auto_submit(true, PasteMethod::CtrlShiftV));
-        assert!(should_send_auto_submit(true, PasteMethod::ShiftInsert));
-    }
-
-    #[test]
     fn clipboard_is_restored_before_key_injection_error_is_returned() {
         let restored = Cell::new(false);
         let result = finish_clipboard_paste(Err("input failed".into()), 0, || {
@@ -1050,41 +932,4 @@ e.g. 28:1 28:0 means pressing on the Enter button on a standard US keyboard.
         assert!(restored.get());
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn external_script_does_not_wait_for_inherited_stdio() {
-        use std::fs;
-        use std::os::unix::fs::PermissionsExt;
-        use std::sync::mpsc;
-        use std::thread;
-
-        let script_path = std::env::temp_dir().join(format!(
-            "handy-external-script-{}-{}.sh",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("system clock should be after UNIX_EPOCH")
-                .as_nanos()
-        ));
-        fs::write(&script_path, "#!/bin/sh\nsleep 3 &\nexit 0\n").expect("write external script");
-        let mut permissions = fs::metadata(&script_path)
-            .expect("read external script metadata")
-            .permissions();
-        permissions.set_mode(0o700);
-        fs::set_permissions(&script_path, permissions).expect("make external script executable");
-
-        let (sender, receiver) = mpsc::channel();
-        let script_path_for_thread = script_path.clone();
-        thread::spawn(move || {
-            let result =
-                paste_via_external_script("test", script_path_for_thread.to_str().unwrap());
-            sender.send(result).expect("send script result");
-        });
-
-        let result = receiver
-            .recv_timeout(Duration::from_secs(1))
-            .expect("external script should return without waiting for its child");
-        fs::remove_file(script_path).expect("remove external script");
-        assert!(result.is_ok());
-    }
 }

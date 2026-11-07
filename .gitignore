@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
+target/
+node_modules/
+dist/
+*.key
+*.p12
+.env

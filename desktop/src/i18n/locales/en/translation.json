@@ -1,8 +1,9 @@
 {
+  "app": {
+    "name": "Smooth Operator"
+  },
   "tray": {
     "settings": "Settings...",
-    "checkUpdates": "Check for Updates...",
-    "copyLastTranscript": "Copy Last Transcript",
     "unloadModel": "Unload Model",
     "model": "Model",
     "quit": "Quit",
@@ -16,8 +17,6 @@
     "general": "General",
     "models": "Models",
     "advanced": "Advanced",
-    "postProcessing": "Post Process",
-    "history": "History",
     "debug": "Debug",
     "about": "About"
   },
@@ -25,7 +24,7 @@
     "customModelDescription": "Not officially supported",
     "migration": {
       "title": "Your models need an update",
-      "description": "Handy now uses a newer kind of model. Download the new version to keep transcribing. Old versions will be removed.",
+      "description": "Smooth Operator now uses a newer kind of model. Download the new version to keep transcribing. Old versions will be removed.",
       "replaces": "Replaces {{name}}",
       "oldFormat": "Old format",
       "failed": "Download failed",
@@ -62,11 +61,11 @@
     "permissions": {
       "microphone": {
         "name": "Microphone",
-        "why": "So Handy can hear you. Audio is turned into text on this computer and never uploaded."
+        "why": "So Smooth Operator can hear you. Audio is turned into text on this computer and never uploaded."
       },
       "accessibility": {
         "name": "Accessibility",
-        "why": "So your shortcut works in every app, and Handy can type the text where your cursor is."
+        "why": "So your shortcut works in every app, and Smooth Operator can type the text where your cursor is."
       },
       "errors": {
         "checkFailed": "Failed to check permissions. Please try again.",
@@ -80,12 +79,12 @@
       "openSettings": "Open settings",
       "allowed": "Allowed",
       "waiting": "Waiting",
-      "turnOnMac": "Turn on Handy in System Settings, then come back here.",
+      "turnOnMac": "Turn on Smooth Operator in System Settings, then come back here.",
       "turnOnWindows": "Turn on microphone access in Windows Settings, then come back here.",
       "hintBoth": "Allow both to continue",
       "hintMicrophone": "Allow the microphone to continue",
       "welcomeBack": "Welcome back. Picking up where you left off.",
-      "relaunch": "Shortcut not responding after this? <relaunch>Relaunch Handy</relaunch> and you'll land right back here."
+      "relaunch": "Shortcut not responding after this? <relaunch>Relaunch Smooth Operator</relaunch> and you'll land right back here."
     },
     "shell": {
       "back": "Back",
@@ -96,11 +95,11 @@
       "title": "Speak instead of typing, in any app",
       "subtitle": "Pick the languages you will dictate in",
       "languagesLabel": "Languages",
-      "noMatch": "No language matches “{{query}}”. Handy's models cover about 100 languages; more are in settings.",
+      "noMatch": "No language matches “{{query}}”. Smooth Operator's models cover about 100 languages; more are in settings.",
       "appLanguage": "App language",
       "menusIn": "Menus in <b>{{language}}</b>",
       "chinese": {
-        "question": "You speak {{languages}}. Which characters should Handy write?",
+        "question": "You speak {{languages}}. Which characters should Smooth Operator write?",
         "label": "Chinese characters",
         "zh-Hans": "Simplified",
         "zh-Hant": "Taiwan",
@@ -150,73 +149,10 @@
       "resumeLater": "Pick it again to pick up where it left off",
       "hint": "Downloads while you finish setup"
     },
-    "demo": {
-      "title": "Talk in any app, with one shortcut",
-      "hold": "<0>Click where you’d type.</0> <1>Hold your shortcut and talk.</1> <2>Let go, and your words appear.</2>",
-      "tap": "<0>Click where you’d type.</0> <1>Tap your shortcut and talk.</1> <2>Tap again, and your words appear.</2>",
-      "apps": {
-        "messages": "Messages",
-        "notes": "Notes"
-      },
-      "chat": "Are you still coming tonight?",
-      "noteTitle": "Weekend plans",
-      "screenLabel": "A laptop: someone clicks into an app, presses the shortcut and talks, and the words appear where they clicked.",
-      "change": "Change",
-      "yourShortcut": "Your shortcut is",
-      "pressKeys": "Press the new keys",
-      "addKey": "Now add a key",
-      "cancel": "Cancel",
-      "tryIt": "Try it yourself"
-    },
-    "try": {
-      "title": "Give it a try!",
-      "subtitle": "Handy's in the corner to help walk you through it",
-      "noteLabel": "Note",
-      "placeholder": "New note",
-      "hold": "Hold <keys/> and talk.",
-      "tapNext": "Now tap <keys/> once, then talk.",
-      "letGo": "Let go of <keys/> when you're done.",
-      "tapAgain": "Tap <keys/> again when you're done.",
-      "watch": "Watch the note.",
-      "changeKeys": "Change your shortcut, {{keys}}",
-      "doneHold": "High five! That's holding.",
-      "doneHoldNext": "Next, the hands-free way.",
-      "doneTap": "Up top! That's tapping.",
-      "doneTapNext": "Now try holding them while you talk.",
-      "giveFive": "You got it! Give me five",
-      "highFive": "High five",
-      "slowLine": "{{name}} took {{wait}} on this computer. <faster>Try a faster model</faster>",
-      "nothingTyped": "Hmm, nothing landed.",
-      "nothingTypedSub": "Click into the note first, then try again.",
-      "silent": "I didn't hear anything.",
-      "silentSub": "No sound came from this microphone. Try another:",
-      "noWords": "I didn't catch any words.",
-      "noWordsSub": "Try again, and say a whole sentence.",
-      "finish": "Finish",
-      "skip": "Skip",
-      "seconds": "{{value}}s"
-    },
-    "done": {
+    "allSet": {
       "title": "You're all set",
-      "subMac": "Handy's in your menu bar now. Hold or tap <keys/> in any app to talk.",
-      "subTray": "Handy's in your system tray now. Hold or tap <keys/> in any app to talk.",
-      "hint": "You can change these later in Settings",
-      "highFiveLabel": "High five",
-      "atLogin": "Start Handy when I log in",
-      "finish": "Done",
-      "panel": {
-        "name": "Handy",
-        "ready": "Ready",
-        "languages": "Languages",
-        "model": "Speech model",
-        "shortcut": "Shortcut",
-        "changeLanguages": "Change languages, {{languages}}",
-        "changeModel": "Change speech model, {{model}}"
-      }
-    },
-    "linux": {
-      "tryIt": "Not working? <guide>Linux setup guide</guide>",
-      "done": "Not working in other apps? <guide>Linux setup guide</guide>"
+      "body": "Smooth Operator is ready. More setup arrives in the next versions.",
+      "finish": "Finish"
     }
   },
   "modelTable": {
@@ -330,7 +266,7 @@
     "general": {
       "title": "General",
       "shortcut": {
-        "title": "Handy Shortcuts",
+        "title": "Shortcuts",
         "description": "Configure keyboard shortcuts to trigger speech-to-text recording",
         "loading": "Loading shortcuts...",
         "none": "No shortcuts configured",
@@ -344,10 +280,6 @@
           "cancel": {
             "name": "Cancel Shortcut",
             "description": "The keyboard shortcut to cancel the current recording."
-          },
-          "transcribe_with_post_process": {
-            "name": "Post-Processing Hotkey",
-            "description": "Optional: A dedicated hotkey that always applies AI post-processing to your transcription."
           }
         },
         "errors": {
@@ -372,7 +304,7 @@
       },
       "preferredLanguages": {
         "title": "Preferred Languages",
-        "description": "The languages you speak. Handy uses them to recommend models.",
+        "description": "The languages you speak. Smooth Operator uses them to recommend models.",
         "noMatch": "No language matches “{{query}}”",
         "weak": "No model recognizes {{languages}} well yet."
       },
@@ -399,17 +331,17 @@
         "fits": "For your languages",
         "untested": "Untested"
       },
-      "untestedNote": "Not tested with Handy. They may be slower or make more mistakes.",
+      "untestedNote": "Not tested with Smooth Operator. They may be slower or make more mistakes.",
       "untestedHidden_one": "{{count}} more model isn’t tuned for dictation. Search to find it.",
       "untestedHidden_other": "{{count}} more models aren’t tuned for dictation. Search to find one.",
-      "emptyYours": "No models yet. Pick one below: it downloads, then Handy uses it.",
+      "emptyYours": "No models yet. Pick one below: it downloads, then Smooth Operator uses it.",
       "showMore": "Show {{count}} more",
       "showFewer": "Show fewer",
       "download": "Download and use",
       "downloadingThenUse": "{{percent}}% of {{total}}, then switches",
       "loading": "Loading…",
       "deleteAsk": "Delete {{name}}? It frees {{size}}.",
-      "deleteAskActive": "Delete {{name}}? Handy can’t transcribe until you pick another.",
+      "deleteAskActive": "Delete {{name}}? Smooth Operator can’t transcribe until you pick another.",
       "cancel": "Cancel",
       "deleteModel": "Delete {{name}}",
       "cancelDownload": "Stop downloading {{name}}",
@@ -423,14 +355,14 @@
         "marks": "? hasn’t been measured yet. — doesn’t hear that language."
       },
       "retiredNotice": {
-        "title": "Old models no longer work with Handy",
+        "title": "Old models no longer work with Smooth Operator",
         "description": "They're taking up {{size}} on your computer.",
         "delete": "Delete models",
         "deleteFailed": "Some old models couldn't be deleted. Check the log for details."
       },
       "rescan": {
         "label": "Rescan",
-        "tooltip": "Rescan for models added to the models folder or Hugging Face cache outside Handy"
+        "tooltip": "Rescan for models added to the models folder or Hugging Face cache outside Smooth Operator"
       }
     },
     "languages": {
@@ -470,7 +402,6 @@
         "app": "App",
         "output": "Output",
         "transcription": "Transcription",
-        "history": "History",
         "experimental": "Experimental"
       },
       "experimentalToggle": {
@@ -500,11 +431,11 @@
       },
       "autostart": {
         "label": "Launch on Startup",
-        "description": "Automatically start Handy when you log in to your computer."
+        "description": "Automatically start Smooth Operator when you log in to your computer."
       },
       "showTrayIcon": {
         "label": "Show Tray Icon",
-        "description": "Display the Handy icon in the system tray."
+        "description": "Display the Smooth Operator icon in the system tray."
       },
       "overlay": {
         "style": {
@@ -533,10 +464,8 @@
           "clipboardCtrlShiftV": "Clipboard (Ctrl+Shift+V)",
           "clipboardShiftInsert": "Clipboard (Shift+Insert)",
           "direct": "Direct",
-          "none": "None",
-          "externalScript": "External Script"
-        },
-        "externalScriptPlaceholder": "/path/to/your/script.sh"
+          "none": "None"
+        }
       },
       "typingTool": {
         "title": "Typing Tool",
@@ -551,17 +480,6 @@
         "options": {
           "dontModify": "Don't Modify Clipboard",
           "copyToClipboard": "Copy to Clipboard"
-        }
-      },
-      "autoSubmit": {
-        "title": "Auto Submit",
-        "description": "Automatically send the selected key combination after text insertion. Cmd+Enter applies on macOS, while Windows/Linux use Super+Enter.",
-        "options": {
-          "off": "Off",
-          "enter": "Enter",
-          "cmdEnter": "Cmd+Enter",
-          "superEnter": "Super+Enter",
-          "ctrlEnter": "Ctrl+Enter"
         }
       },
       "translateToEnglish": {
@@ -627,97 +545,6 @@
         }
       }
     },
-    "postProcessing": {
-      "hotkey": {
-        "title": "Hotkey"
-      },
-      "api": {
-        "title": "API",
-        "provider": {
-          "title": "Provider",
-          "description": "Select an OpenAI-compatible or Anthropic-compatible provider."
-        },
-        "apiFormat": {
-          "title": "API Format",
-          "description": "Request format expected by your custom endpoint.",
-          "options": {
-            "openai": "OpenAI Compatible (Chat Completions)",
-            "anthropic": "Anthropic Messages"
-          }
-        },
-        "appleIntelligence": {
-          "unavailable": "Apple Intelligence is not available on this device. Requires an Apple Silicon Mac running macOS Tahoe (26.0) or later with Apple Intelligence enabled in System Settings."
-        },
-        "baseUrl": {
-          "title": "Base URL",
-          "description": "API base URL for the selected provider. Only the custom provider can be edited.",
-          "placeholder": "https://api.openai.com/v1",
-          "placeholderAnthropic": "https://api.anthropic.com/v1"
-        },
-        "apiKey": {
-          "title": "API Key",
-          "description": "API key for the selected provider.",
-          "placeholder": "sk-..."
-        },
-        "model": {
-          "title": "Model",
-          "descriptionCustom": "Provide the model identifier expected by your custom endpoint.",
-          "descriptionDefault": "Choose a model exposed by the selected provider.",
-          "placeholderWithOptions": "Search or select a model",
-          "placeholderNoOptions": "Type a model name",
-          "refreshModels": "Refresh models"
-        }
-      },
-      "prompts": {
-        "title": "Prompt",
-        "selectedPrompt": {
-          "title": "Selected Prompt",
-          "description": "Select a template for refining transcriptions or create a new one. Use ${output} inside the prompt text to reference the captured transcript."
-        },
-        "noPrompts": "No prompts available",
-        "selectPrompt": "Select a prompt",
-        "createNew": "Create New Prompt",
-        "promptLabel": "Prompt Label",
-        "promptLabelPlaceholder": "Enter prompt name",
-        "promptInstructions": "Prompt Instructions",
-        "promptInstructionsPlaceholder": "Write the instructions to run after transcription. Example: Improve grammar and clarity for the following text: ${output}",
-        "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt.",
-        "updatePrompt": "Update Prompt",
-        "deletePrompt": "Delete Prompt",
-        "createPrompt": "Create Prompt",
-        "cancel": "Cancel",
-        "selectToEdit": "Select a prompt above to view and edit its details.",
-        "createFirst": "Click 'Create New Prompt' above to create your first post-processing prompt."
-      }
-    },
-    "history": {
-      "title": "History",
-      "openFolder": "Open Recordings Folder",
-      "loading": "Loading history...",
-      "empty": "No transcriptions yet. Start recording to build your history!",
-      "copyToClipboard": "Copy transcription to clipboard",
-      "copyError": "Failed to copy transcription to clipboard.",
-      "save": "Save transcription",
-      "unsave": "Remove from saved",
-      "delete": "Delete entry",
-      "deleteError": "Failed to delete entry. Please try again.",
-      "retranscribe": "Re-transcribe",
-      "cancelTranscription": "Cancel transcription",
-      "transcribing": "Transcribing...",
-      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon.",
-      "notTranscribed": "Not transcribed. You can transcribe it using the retry icon.",
-      "transcribeFile": "Transcribe File",
-      "mediaFiles": "Audio and video",
-      "fileUnsupported": "Couldn't read audio from {{name}}.",
-      "transcribeFailed": "Transcription failed. Please try again.",
-      "waiting": "Waiting to transcribe",
-      "transcribingPercent": "Transcribing, {{percent}}%",
-      "readingFile": "Reading file...",
-      "showMore": "Show more",
-      "showLess": "Show less",
-      "dropTitle": "Drop to transcribe",
-      "dropDescription": "It'll show up in History."
-    },
     "debug": {
       "title": "Debug",
       "logDirectory": {
@@ -739,16 +566,6 @@
         "lineCount": "{{count}} lines",
         "empty": "Waiting for logs… Entries appear here as the app emits them."
       },
-      "updateChecks": {
-        "label": "Check for Updates",
-        "description": "Automatically check for new versions of Handy",
-        "lockedDescription": "Disabled by system configuration (HANDY_DISABLE_UPDATER)"
-      },
-      "whatsNewPreview": {
-        "title": "Preview What's New",
-        "description": "Open the latest bundled release note without marking it as seen",
-        "button": "Preview"
-      },
       "onboardingPreview": {
         "title": "Preview Onboarding",
         "description": "Preview onboarding screens without changing permissions, models, or completion state",
@@ -758,8 +575,6 @@
           "welcome": "Welcome",
           "permissions": "Permissions",
           "model": "Model",
-          "demo": "Demo",
-          "try": "Try it",
           "done": "All set"
         }
       },
@@ -781,11 +596,6 @@
         "title": "Word Correction Threshold",
         "description": "Sensitivity for custom word corrections"
       },
-      "historyLimit": {
-        "title": "History Limit",
-        "description": "Maximum number of history entries to keep",
-        "entries": "entries"
-      },
       "recordingRetention": {
         "title": "Auto-Delete Recordings",
         "description": "Automatically delete old recordings to save space",
@@ -803,10 +613,6 @@
       "clamshellMicrophone": {
         "title": "Clamshell Microphone",
         "description": "Microphone to use when laptop lid is closed"
-      },
-      "postProcessingToggle": {
-        "label": "Post Processing",
-        "description": "Enable AI-powered text refinement after transcription"
       },
       "muteWhileRecording": {
         "label": "Mute While Recording",
@@ -847,7 +653,7 @@
       },
       "keyboardDiagnostic": {
         "title": "Keyboard Diagnostic",
-        "description": "Checks whether keyboard events reach Handy. Only event counts are recorded — never which keys you press.",
+        "description": "Checks whether keyboard events reach Smooth Operator. Only event counts are recorded — never which keys you press.",
         "run": "Run 10s diagnostic",
         "running": "Listening… press your shortcut a few times (e.g. Option+Space)",
         "secureInputLabel": "Secure Input",
@@ -861,7 +667,7 @@
         "mouse": "Mouse",
         "verdictBlocked": "Secure Input is blocking key events — keyed shortcuts cannot work until it is resolved.",
         "verdictSuspicious": "Modifier events arrived but no key events — something is suppressing keys even though Secure Input reports disabled. Please report this on GitHub.",
-        "verdictOk": "Key events are reaching Handy normally.",
+        "verdictOk": "Key events are reaching Smooth Operator normally.",
         "verdictNoEvents": "No events captured — did you press any keys during the test?",
         "failed": "Diagnostic failed: {{error}}"
       }
@@ -870,53 +676,27 @@
       "title": "About",
       "version": {
         "title": "Version",
-        "description": "Current version of Handy"
-      },
-      "whatsNewUpdates": {
-        "label": "Show What's New",
-        "description": "Show release notes after Handy updates"
+        "description": "Current version of Smooth Operator"
       },
       "appDataDirectory": {
         "title": "App Data Directory",
-        "description": "Location where Handy stores its data"
-      },
-      "sourceCode": {
-        "title": "Source Code",
-        "description": "View source code and contribute",
-        "button": "View on GitHub"
-      },
-      "supportDevelopment": {
-        "title": "Support Development",
-        "description": "Help us continue building Handy",
-        "button": "Donate"
+        "description": "Location where Smooth Operator stores its data"
       },
       "acknowledgments": {
         "title": "Acknowledgments",
         "ggml": {
           "title": "ggml",
           "description": "High-performance tensor library for on-device machine learning inference",
-          "details": "Handy's local speech-to-text is built on transcribe.cpp and ggml. Thanks to the amazing work by Georgi Gerganov and contributors."
+          "details": "Smooth Operator's local speech-to-text is built on transcribe.cpp and ggml. Thanks to the amazing work by Georgi Gerganov and contributors."
         }
       }
     }
   },
   "footer": {
-    "checkingUpdates": "Checking for updates...",
-    "updateAvailableShort": "Update available",
     "upToDate": "Up to date",
-    "updateCheckingDisabled": "Update Checking Disabled",
     "downloading": "Downloading... {{progress}}%",
     "installing": "Installing...",
-    "preparing": "Preparing...",
-    "checkForUpdates": "Check for updates",
-    "portableUpdateTitle": "Manual update required",
-    "portableUpdateMessage": "Portable installs cannot be updated automatically. Download the installer for your system below, run it, and install to the same folder — your Data/ folder (settings, models, recordings) is kept in place.",
-    "portableUpdateButton": "Download installer",
-    "portableUpdateBrowseMessage": "Portable installs cannot be updated automatically. Download the latest version for your system from GitHub Releases and install it to the same folder — your Data/ folder (settings, models, recordings) is kept in place.",
-    "portableUpdateBrowseButton": "Open GitHub Releases"
-  },
-  "whatsNew": {
-    "title": "New in Handy v{{version}}"
+    "preparing": "Preparing..."
   },
   "common": {
     "playbackPosition": "Playback position",
@@ -941,15 +721,11 @@
     "noInputDeviceTitle": "No Microphone Found",
     "noInputDevice": "No audio input device was detected. Please connect a microphone or headset and try again.",
     "recordingFailedTitle": "Failed to Start Recording",
-    "modelLoadFailed": "Handy couldn't load this model. Try again or choose a different one.",
+    "modelLoadFailed": "Smooth Operator couldn't load this model. Try again or choose a different one.",
     "modelLoadFailedTitle": "Failed to Load Model",
     "modelDownloadFailed": "Download failed",
     "pasteFailedTitle": "Failed to Paste Text",
     "pasteFailed": "Text could not be pasted into the active application.",
-    "postProcessFailedTitle": "Pasted Without Post-Processing",
-    "postProcessFailed": "Post Process didn't finish, so the transcript was pasted as is.",
-    "filePostProcessFailedTitle": "Transcribed Without Post-Processing",
-    "filePostProcessFailed": "Post Process didn't finish, so the transcript was saved as is.",
     "fileTranscriptionFailedTitle": "File Transcription Failed",
     "transcriptionFailedTitle": "Transcription Failed"
   },
@@ -962,11 +738,11 @@
   },
   "appLanguage": {
     "title": "Application Language",
-    "description": "Change the language of the Handy interface"
+    "description": "Change the language of the Smooth Operator interface"
   },
   "theme": {
     "title": "Application Theme",
-    "description": "Choose whether Handy follows your system theme or stays light or dark",
+    "description": "Choose whether Smooth Operator follows your system theme or stays light or dark",
     "options": {
       "system": "System",
       "light": "Light",

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! Receipt-sequenced clipboard paste ("reliable paste", debug-gated).
 //!
 //! The legacy clipboard paste (`clipboard::paste_via_clipboard`) restores the
@@ -80,10 +82,6 @@ pub(crate) struct TxState {
     /// A newer paste transaction settled this one early (see flush logic in
     /// the platform modules).
     pub cancelled: bool,
-    /// The post-paste Enter (auto-submit) has been sent for this transaction.
-    /// (Read on Windows; the macOS path settles via `MacPending::settled`.)
-    #[allow(dead_code)]
-    pub auto_submit_sent: bool,
     /// First post-injection receipt has been logged.
     pub logged_receipt: bool,
 }
@@ -97,7 +95,6 @@ impl TxState {
             receipts: Vec::new(),
             ownership_lost: false,
             cancelled: false,
-            auto_submit_sent: false,
             logged_receipt: false,
         }
     }
@@ -130,7 +127,7 @@ impl TxState {
 
 pub(crate) enum WaitDecision {
     KeepWaiting,
-    /// Stop waiting; settle the transaction (auto-submit + guarded restore).
+    /// Stop waiting; settle the transaction (guarded restore).
     Finish,
 }
 
@@ -188,16 +185,13 @@ pub(crate) fn send_chord(
 /// Attempts the receipt-sequenced paste. Returns `Err` before anything has
 /// been published when the platform transaction cannot start, in which case
 /// the caller should fall back to the legacy paste path. On `Ok`, publishing
-/// and chord injection have completed and the guarded restore (plus
-/// auto-submit) finishes asynchronously.
+/// and chord injection have completed and the guarded restore finishes asynchronously.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(crate) fn try_reliable_paste(
     text: &str,
     app_handle: &tauri::AppHandle,
     paste_method: &crate::settings::PasteMethod,
     enigo: &mut enigo::Enigo,
-    auto_submit: bool,
-    auto_submit_key: crate::settings::AutoSubmitKey,
     clipboard_handling: crate::settings::ClipboardHandling,
 ) -> Result<(), String> {
     platform::run(
@@ -205,8 +199,6 @@ pub(crate) fn try_reliable_paste(
         app_handle,
         paste_method,
         enigo,
-        auto_submit,
-        auto_submit_key,
         clipboard_handling,
     )
 }

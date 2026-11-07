@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! Tauri global-shortcut implementation
 //!
 //! This module provides shortcut functionality using Tauri's built-in
@@ -20,10 +22,6 @@ pub fn init_shortcuts(app: &AppHandle) {
     for (id, default_binding) in default_bindings {
         if id == "cancel" {
             continue; // Skip cancel shortcut, it will be registered dynamically
-        }
-        // Skip post-processing shortcut when the feature is disabled
-        if id == "transcribe_with_post_process" && !user_settings.post_process_enabled {
-            continue;
         }
         let binding = user_settings
             .bindings

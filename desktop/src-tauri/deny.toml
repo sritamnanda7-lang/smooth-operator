@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
+# cargo-deny policy. Run from desktop/src-tauri: cargo deny check
+[graph]
+# Lockfile lists Linux-only crates (Tauri's GTK stack). We ship macOS + Windows only.
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "warn"
+# Unmaintained crates deep in the Tauri/wry stack are upstream's to replace: only our own direct deps fail the build.
+# They stay visible as warnings in `cargo audit`.
+unmaintained = "workspace"
+# Every ignore needs a reason. Mirrored in .cargo/audit.toml (cargo-audit).
+ignore = [
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.38 via the plist crate used at build time (tauri-codegen/tauri-utils). Parses only our own plists; no network or user XML. No fix without a Tauri bump." },
+  { id = "RUSTSEC-2026-0195", reason = "Same as RUSTSEC-2026-0194 (build-time tauri-codegen/tauri-utils plist)." },
+  { id = "RUSTSEC-2026-0235", reason = "rkyv 0.7 is only an optional feature of rust_decimal (via byte-unit, tauri-plugin-log); feature is off, crate is not compiled (cargo tree -i rkyv is empty)." },
+  { id = "RUSTSEC-2026-0367", reason = "zip 4.6 comes only from tauri-plugin-updater, which is optional (cargo feature `spike`, never in release builds). Extraction of untrusted archives is not reachable. Revisit at step 9 when the updater ships." },
+  { id = "RUSTSEC-2026-0368", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
+  { id = "RUSTSEC-2026-0369", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
+  { id = "RUSTSEC-2026-0429", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "MPL-2.0",
+  "CC0-1.0",
+  "BSL-1.0",
+  "0BSD",
+  "CDLA-Permissive-2.0",
+]
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# Exactly the pinned git deps (Cargo.toml: hf-hub, tauri-nspanel, tao, tao-macros).
+allow-git = [
+  "https://github.com/cjpais/hf-hub",
+  "https://github.com/ahkohd/tauri-nspanel",
+  "https://github.com/cjpais/tao",
+]
