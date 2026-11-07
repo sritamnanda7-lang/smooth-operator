@@ -1,0 +1,37 @@
+Smooth Operator
+Copyright 2026 Sritam Nanda
+
+This repository holds two bodies of code under two licences.
+
+1. Smooth Operator code: Functional Source License 1.1, MIT Future License
+   (FSL-1.1-MIT), text in LICENSE. This is every file that is not Handy code:
+   new files under desktop/src-tauri/src/so/ and desktop/src/so/, scripts/,
+   tests/, .github/, chrome-extension/ and site/ (when they exist), the root
+   configuration files, and the placeholder icons.
+
+2. Handy code: MIT License, text in desktop/LICENSE.
+   Handy v0.10.0, Copyright (c) 2025 CJ Pais, https://github.com/cjpais/Handy
+   Everything else under desktop/ started as Handy v0.10.0 (git tag
+   handy-v0.10.0-base). Files we modified keep the MIT licence and carry the
+   header "SPDX-License-Identifier: MIT" with a note that they are modified.
+   Unchanged and headerless Handy files are declared MIT in REUSE.toml.
+
+Path to licence map
+  desktop/**                              MIT (Handy), except the paths below
+  desktop/src-tauri/src/so/**             FSL-1.1-MIT
+  desktop/src/so/**                       FSL-1.1-MIT
+  desktop/src-tauri/capabilities/overlay.json  FSL-1.1-MIT
+  desktop/src-tauri/icons/**, desktop/src-tauri/resources/*.png
+                                          FSL-1.1-MIT (placeholder icons we generated)
+  everything outside desktop/             FSL-1.1-MIT
+  REUSE.toml lists every file without an in-file header.
+
+Third-party material used by the app
+  Speech recognition models (downloaded by the user, not bundled):
+    OpenAI Whisper: MIT.
+    NVIDIA Parakeet TDT 0.6B v3: Creative Commons Attribution 4.0
+    (CC-BY-4.0). Attribution: "NVIDIA Parakeet TDT 0.6B v3, licensed under
+    CC-BY-4.0, https://creativecommons.org/licenses/by/4.0/".
+  Inference: transcribe.cpp and ggml (MIT), Georgi Gerganov and contributors.
+  Rust and JavaScript dependencies keep their own licences; cargo-deny checks
+  the Rust set against an allow list (desktop/src-tauri/deny.toml).
