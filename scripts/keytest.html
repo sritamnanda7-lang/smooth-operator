@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: FSL-1.1-MIT -->
+<!-- Gate 2 key logger. Local file only: no network, no storage, no external scripts. Open in Chrome via file://. -->
+<html lang="en"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>keytest</title>
+<style>body{font:14px monospace;margin:1em}#log{white-space:pre;border:1px solid #888;padding:.5em;height:60vh;overflow:auto}
+#sum{margin:.5em 0;font-weight:bold}</style></head>
+<body>
+<h3>Gate 2 key test</h3>
+<p>Click the box, hold the hotkey and press Enter (or Esc). PASS = no Enter/Esc keydown or keyup appears. Plain Enter/Esc must appear.</p>
+<input id="box" size="40" placeholder="click here, then test">
+<div id="sum">Enter: 0 down / 0 up &nbsp; Escape: 0 down / 0 up</div>
+<button id="clear">Clear</button>
+<div id="log"></div>
+<script>
+(function () {
+  var log = document.getElementById('log'), sum = document.getElementById('sum');
+  var c = { Enter: [0, 0], Escape: [0, 0] }, t0 = performance.now();
+  function mods(e) {
+    var m = [];
+    if (e.metaKey) m.push('Meta'); if (e.ctrlKey) m.push('Ctrl'); if (e.altKey) m.push('Alt'); if (e.shiftKey) m.push('Shift');
+    return m.join('+') || '-';
+  }
+  function rec(e) {
+    var up = e.type === 'keyup';
+    if (c[e.key]) c[e.key][up ? 1 : 0]++;
+    var line = (performance.now() - t0).toFixed(0).padStart(7) + ' ms  ' + e.type.padEnd(7) + ' key=' + e.key + ' code=' + e.code + ' mods=' + mods(e) + (e.repeat ? ' repeat' : '') + '\n';
+    log.textContent += line; log.scrollTop = log.scrollHeight;
+    sum.textContent = 'Enter: ' + c.Enter[0] + ' down / ' + c.Enter[1] + ' up   Escape: ' + c.Escape[0] + ' down / ' + c.Escape[1] + ' up';
+  }
+  addEventListener('keydown', rec, true); addEventListener('keyup', rec, true);
+  document.getElementById('clear').onclick = function () { log.textContent = ''; c.Enter = [0, 0]; c.Escape = [0, 0]; sum.textContent = 'cleared'; };
+})();
+</script></body></html>

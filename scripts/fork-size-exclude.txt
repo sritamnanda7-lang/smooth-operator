@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
+# Gate 9 exclusions: one repo-relative path per line (Handy base path), whole file only.
+# FROZEN: any edit to this file needs reviewer + founder OK. Whole-file deletions are
+# excluded automatically (they are not "modified"); do not list them here.
