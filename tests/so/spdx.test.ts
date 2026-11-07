@@ -75,13 +75,13 @@ describe("SPDX headers vs base tag", () => {
       if (globs.some((g) => g.test(path))) continue;
       if (existsSync(join(ROOT, `${path}.license`))) continue;
       const h = head(path);
-      const m = /SPDX-License-Identifier:\s*([A-Za-z0-9.\-+ ]+)/.exec(h);
+      const m = /SPDX-License-Identifier:\s*([^\r\n]*?)\s*(?:-->|\*\/|\r?\n|$)/.exec(h);
       if (!m) {
         missing.push(`${path} (${kind}): no SPDX header`);
         continue;
       }
       const id = m[1].trim();
-      if (kind === "A" && id !== "FSL-1.1-MIT") missing.push(`${path}: new file must be FSL-1.1-MIT, found ${id}`);
+      if (kind === "A" && !["FSL-1.1-MIT", "FSL-1.1-MIT AND MIT"].includes(id)) missing.push(`${path}: new file must be FSL-1.1-MIT, found ${id}`);
       if (kind === "M" && id !== "MIT") missing.push(`${path}: modified Handy file must be MIT, found ${id}`);
     }
     expect(missing, missing.slice(0, 20).join("\n")).toEqual([]);

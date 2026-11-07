@@ -1,3 +1,4 @@
+; SPDX-License-Identifier: MIT
 ; Custom NSIS template for Smooth Operator with portable mode support.
 ; Based on tauri-apps/tauri@tauri-v2.9.1 crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi
 ; Portable changes are marked with "; --- PORTABLE MODE ---" comments.

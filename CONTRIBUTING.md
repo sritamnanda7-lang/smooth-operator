@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: FSL-1.1-MIT -->
 # Contributing
 
 Smooth Operator is source-available under FSL-1.1-MIT (see LICENSE and NOTICE).

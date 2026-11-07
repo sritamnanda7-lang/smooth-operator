@@ -259,12 +259,10 @@ SPDX-License-Identifier = "MIT"
 # Handy files we modified that cannot carry a header (modified = still MIT).
 path = [
   "desktop/bun.lock",
-  "desktop/index.html",
   "desktop/package.json",
   "desktop/src-tauri/Cargo.lock",
   "desktop/src-tauri/Info.plist",
   "desktop/src-tauri/capabilities/default.json",
-  "desktop/src-tauri/nsis/installer.nsi",
   "desktop/src-tauri/tauri.conf.json",
   "desktop/src/bindings.ts",
   "desktop/src/i18n/locales/en/translation.json",
@@ -276,8 +274,6 @@ SPDX-License-Identifier = "MIT"
 [[annotations]]
 # Our own files that cannot carry a header.
 path = [
-  ".gitignore",
-  "CONTRIBUTING.md",
   "LICENSE",
   "NOTICE",
   "bun.lock",
@@ -312,7 +308,7 @@ path = [
   "desktop/src-tauri/resources/tray_transcribing.png",
   "desktop/src-tauri/resources/tray_transcribing_dark.png",
   "package.json",
-  "scripts/keytest.html",
+  "tests/strip-checks/Cargo.lock",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright 2026 Sritam Nanda"

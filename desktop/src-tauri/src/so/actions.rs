@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: FSL-1.1-MIT
+// SPDX-License-Identifier: FSL-1.1-MIT AND MIT
+// Portions from Handy v0.10.0, Copyright (c) 2025 CJ Pais, MIT (desktop/LICENSE)
 //! Shortcut actions. Handy's dictation action (record, transcribe, paste) is
 //! gone; later steps add our own actions here (hold / double-tap talk).
 
