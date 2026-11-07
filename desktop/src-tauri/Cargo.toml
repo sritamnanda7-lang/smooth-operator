@@ -79,13 +79,14 @@ libc = "0.2"
 transcribe-cpp = { version = "0.4.0", default-features = false, features = [
   "serde",
 ] }
-handy-keys = "0.3.4"
+# Exact pin: the key hook is security-critical (reviewed 0.3.4 source).
+handy-keys = "=0.3.4"
 ferrous-opencc = "0.2.3"
 clap = { version = "4", features = ["derive"] }
 specta = "=2.0.0-rc.22"
 specta-typescript = "0.0.9"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
-hf-hub = { git = "https://github.com/cjpais/hf-hub", branch = "cancellable-downloads", features = [
+hf-hub = { git = "https://github.com/cjpais/hf-hub", rev = "9918f11ab3473135eb7865aa4a5d79d597e6e810", features = [
   "tokio",
 ] }
 
@@ -152,7 +153,7 @@ transcribe-cpp = { version = "0.4.0", default-features = false, features = ["met
 transcribe-cpp = { version = "0.4.0", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "da9c9a8d4eb7f0524a2508988df1a7d9585b4904" }
 # Used by the receipt-sequenced ("reliable") paste path for lazy NSPasteboard
 # promises. Versions track what Tauri already pulls in.
 objc2 = "0.6"
