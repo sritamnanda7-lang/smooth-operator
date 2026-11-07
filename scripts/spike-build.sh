@@ -6,7 +6,7 @@
 #   --adhoc    sign the .app ad-hoc ("-") instead of the local self-signed identity.
 # Needs: ~/.so-keys/spike-updater.key (private updater key, empty password; only its PATH is used here)
 #        login keychain identity "Smooth Operator Self-Signed" (not needed with --adhoc).
-# Output: desktop/src-tauri/target/spike-out/<version>[-adhoc]/ with the .app.tar.gz, .sig, dmg and a
+# Output: desktop/src-tauri/target/spike-out/<version>[-adhoc]/ with the .app.tar.gz, .sig, a plain dmg and a
 #         latest.json for `python3 -m http.server 8765 --bind 127.0.0.1` run in that folder.
 # Signing: Tauri signs the .app while bundling when APPLE_SIGNING_IDENTITY is set, so the updater tarball
 #          and the dmg both hold the signed app (signing afterwards would leave the tarball unsigned).
@@ -24,12 +24,14 @@ KEY="$HOME/.so-keys/spike-updater.key"
 
 if [ "$ADHOC" = 1 ]; then IDENTITY="-"; TAG="$VERSION-adhoc"; else IDENTITY="Smooth Operator Self-Signed"; TAG="$VERSION"; fi
 
+# Tauri 2 reads the key from TAURI_SIGNING_PRIVATE_KEY; a file path is accepted. Only the path is set here.
+export TAURI_SIGNING_PRIVATE_KEY="$KEY"
 export TAURI_SIGNING_PRIVATE_KEY_PATH="$KEY"
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD=""
 export APPLE_SIGNING_IDENTITY="$IDENTITY"
 
 cd "$ROOT/desktop"
-bun run tauri build --bundles app dmg --features spike \
+bun run tauri build --bundles app --features spike \
   --config src-tauri/tauri.spike.conf.json \
   --config "{\"version\":\"$VERSION\"}" -- --locked
 
@@ -38,7 +40,12 @@ APP="$BUNDLE/macos/Smooth Operator.app"
 OUT="$ROOT/desktop/src-tauri/target/spike-out/$TAG"
 mkdir -p "$OUT"
 cp "$BUNDLE/macos/Smooth Operator.app.tar.gz" "$BUNDLE/macos/Smooth Operator.app.tar.gz.sig" "$OUT/"
-cp "$BUNDLE"/dmg/*.dmg "$OUT/" 2>/dev/null || echo "note: no dmg produced"
+# Plain dmg with hdiutil (Tauri's own dmg step scripts Finder and fails without a GUI session).
+STAGE=$(mktemp -d)
+cp -R "$APP" "$STAGE/"
+ln -s /Applications "$STAGE/Applications"
+hdiutil create -quiet -volname "Smooth Operator" -srcfolder "$STAGE" -ov -format UDZO "$OUT/Smooth Operator_${TAG}_aarch64.dmg"
+mv "$STAGE" "$HOME/.Trash/spike-dmg-stage-$$"
 
 echo "--- codesign result ($TAG)"
 codesign -dv "$APP" 2>&1 | grep -E "Identifier|Authority|Signature|flags|TeamIdentifier" || true
