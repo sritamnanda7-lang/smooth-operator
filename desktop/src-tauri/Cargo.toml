@@ -71,7 +71,7 @@ regex = "1"
 whatlang = "0.16"
 isolang = "2"
 chrono = "0.4"
-sha2 = "0.10"
+sha2 = "0.11"
 libc = "0.2"
 # Every model runs through transcribe-cpp (GGUF/ggml, native backends).
 # Per-platform backend features are added in the target tables (Cargo unifies
