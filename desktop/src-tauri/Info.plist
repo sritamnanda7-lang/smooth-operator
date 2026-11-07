@@ -3,6 +3,6 @@
 <plist version="1.0">
 <dict>
   <key>NSMicrophoneUsageDescription</key>
-  <string>Request microphone access to transcribe audio locally</string>
+  <string>Smooth Operator listens through the microphone to hear your spoken commands. Audio is processed on this Mac and is never stored or uploaded.</string>
 </dict>
 </plist>

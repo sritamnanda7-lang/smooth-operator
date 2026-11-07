@@ -2,9 +2,8 @@
 // Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, Info, Cpu } from "lucide-react";
-import HandyTextLogo from "./icons/HandyTextLogo";
-import HandyHand from "./icons/HandyHand";
+import { Cog, Cpu, FlaskConical, Info, Settings } from "lucide-react";
+import { Wordmark } from "@/so/Wordmark";
 import { useSettings } from "../hooks/useSettings";
 import {
   GeneralSettings,
@@ -34,7 +33,7 @@ interface SectionConfig {
 export const SECTIONS_CONFIG = {
   general: {
     labelKey: "sidebar.general",
-    icon: HandyHand,
+    icon: Settings,
     component: GeneralSettings,
     enabled: () => true,
   },
@@ -82,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="flex flex-col w-40 h-full border-e border-line items-center px-2">
-      <HandyTextLogo width={120} className="m-4" />
+      <Wordmark className="m-4 text-center text-base" />
       <div className="flex flex-col w-full items-center gap-1 pt-2 border-t border-line">
         {availableSections.map((section) => {
           const Icon = section.icon;

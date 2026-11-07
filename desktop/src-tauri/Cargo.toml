@@ -2,9 +2,9 @@
 # Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais).
 [package]
 name = "handy"
-version = "0.10.0"
-description = "Handy"
-authors = ["cjpais"]
+version = "0.1.0"
+description = "Smooth Operator"
+authors = ["cjpais", "Sritam Nanda"]
 edition = "2021"
 license = "MIT"
 default-run = "handy"
