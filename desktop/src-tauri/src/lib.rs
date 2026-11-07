@@ -28,6 +28,8 @@ mod secure_input;
 mod settings;
 mod shortcut;
 mod so;
+#[cfg(feature = "spike")]
+mod spike;
 mod system_languages;
 mod tray;
 mod tray_i18n;
@@ -525,6 +527,9 @@ pub fn run(cli_args: CliArgs) {
         .expect("Failed to export typescript bindings");
 
     let invoke_handler = specta_builder.invoke_handler();
+    // Spike builds add their own `spike_*` commands (cargo feature `spike`).
+    #[cfg(feature = "spike")]
+    let invoke_handler = spike::wrap_handler(invoke_handler);
 
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
@@ -755,6 +760,10 @@ pub fn run(cli_args: CliArgs) {
             if should_force_show || !should_hide || !tray_available {
                 show_main_window(&app_handle);
             }
+
+            // Step 0 spike harness (cargo feature `spike`; not in normal builds).
+            #[cfg(feature = "spike")]
+            spike::init(&app_handle);
 
             Ok(())
         })
