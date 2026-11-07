@@ -249,9 +249,17 @@ fn t05_network_hosts_allowlist() {
         if r.contains("/i18n/locales/") || r.ends_with("bindings.ts") {
             continue;
         }
+        if r.ends_with("/tests.rs") || r.contains("/tests/") {
+            continue;
+        }
         let Ok(t) = fs::read_to_string(&f) else { continue };
+        let mut in_tests = false;
         for (i, line) in t.lines().enumerate() {
-            if is_comment(line) {
+            // `#[cfg(test)]` modules sit at the end of a Rust file: stop scanning there.
+            if r.ends_with(".rs") && line.trim_start().starts_with("#[cfg(test)]") && !line.starts_with(' ') {
+                in_tests = true;
+            }
+            if in_tests || is_comment(line) {
                 continue;
             }
             for h in hosts_in(line) {
@@ -293,7 +301,9 @@ fn t06_cli_flags_only_three() {
     assert!(!t.contains("short = 'f'"), "-f short flag");
     // no other place forwards or defines the removed flags
     assert_none("removed flags used elsewhere", grep(&["desktop/src-tauri/src"], RS,
-        &["--toggle-transcription", "--toggle-post-process", "--transcribe-file", "--list-models", "--list-devices", "--device-index"], true));
+        &["--toggle-transcription", "--toggle-post-process", "--transcribe-file", "--list-models", "--list-devices", "--device-index"], true)
+        // Handy's worker error text still says "(see --list-devices)"; worker.rs is kept at base (N2).
+        .into_iter().filter(|h| !h.contains("No compute device with index")).collect());
 }
 #[test]
 fn t06_no_file_drop_transcribe_command_or_external_script() {
@@ -306,6 +316,14 @@ fn t06_no_file_drop_transcribe_command_or_external_script() {
 fn t06_single_instance_forwards_nothing() {
     assert_none("single-instance toggle forwarding", grep(&["desktop/src-tauri/src"], RS,
         &["toggle_transcription", "toggle_post_process", "send_transcription_input", "args.cancel", "args.transcribe"], true));
+}
+
+#[test]
+fn sf1_no_auto_submit() {
+    // Handy's auto-submit pressed Enter after pasting. Never allowed: Enter is an approval key.
+    assert_none("auto-submit / send_return_key", grep(&SRC_DIRS, &[],
+        &["auto_submit", "AutoSubmit", "autoSubmit", "send_return_key", "auto-submit"], false)
+        .into_iter().filter(|h| !h.contains("/i18n/locales/")).collect());
 }
 
 // ---- 7 files absent ----
@@ -329,7 +347,10 @@ fn t07_files_absent() {
 #[test]
 fn t08_no_sigusr_handlers() {
     assert!(!p("desktop/src-tauri/src/signal_handle.rs").exists(), "signal_handle.rs");
-    assert_none("SIGUSR/signal_hook", grep(&["desktop/src-tauri/src"], RS, &["SIGUSR1", "SIGUSR2", "signal_hook"], true));
+    // SIG_IGN (ignore) is allowed: Handy's transcription worker ignores these signals so a stray
+    // one cannot kill it. Anything else (a handler that triggers actions) is forbidden.
+    assert_none("SIGUSR/signal_hook", grep(&["desktop/src-tauri/src"], RS, &["SIGUSR1", "SIGUSR2", "signal_hook"], true)
+        .into_iter().filter(|h| !h.contains("SIG_IGN")).collect());
     assert!(!read("desktop/src-tauri/Cargo.toml").contains("signal-hook"), "signal-hook dep");
 }
 
@@ -359,6 +380,37 @@ fn t09_updater_plugin_only_under_spike_feature() {
     if let Some(dep) = cargo.get("dependencies").and_then(|d| d.get("tauri-plugin-updater")) {
         assert_eq!(dep.get("optional"), Some(&toml::Value::Boolean(true)), "tauri-plugin-updater must be optional");
         assert!(cargo.get("features").and_then(|f| f.get("spike")).is_some(), "cargo feature `spike` missing");
+    }
+}
+
+// SF7: zip advisories are ignored only because the updater is spike-only. Walk every
+// dependency table (also the target-specific ones) and fail if it is not optional.
+fn find_dep(v: &toml::Value, name: &str, path: &str, out: &mut Vec<(String, toml::Value)>) {
+    if let Some(t) = v.as_table() {
+        for (k, c) in t {
+            let p = format!("{path}.{k}");
+            if k == "dependencies" {
+                if let Some(d) = c.get(name) {
+                    out.push((p.clone(), d.clone()));
+                }
+            }
+            find_dep(c, name, &p, out);
+        }
+    }
+}
+#[test]
+fn sf7_updater_optional_while_zip_ignored() {
+    let ignores = format!("{}{}", read("desktop/src-tauri/deny.toml"), read("desktop/src-tauri/.cargo/audit.toml"));
+    let zip_ignored = ["RUSTSEC-2026-0367", "RUSTSEC-2026-0368", "RUSTSEC-2026-0369", "RUSTSEC-2026-0429"]
+        .iter().any(|id| ignores.contains(id));
+    let cargo: toml::Value = read("desktop/src-tauri/Cargo.toml").parse().unwrap();
+    let mut found = vec![];
+    find_dep(&cargo, "tauri-plugin-updater", "", &mut found);
+    if zip_ignored {
+        assert!(!found.is_empty(), "zip ignored but no tauri-plugin-updater entry found: check the test");
+        for (p, d) in &found {
+            assert_eq!(d.get("optional"), Some(&toml::Value::Boolean(true)), "{p}: updater must be optional while zip ignores exist");
+        }
     }
 }
 

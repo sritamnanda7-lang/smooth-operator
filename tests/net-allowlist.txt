@@ -14,4 +14,3 @@ localhost
 ipc.localhost
 www.w3.org
 schema.tauri.app
-example.com
