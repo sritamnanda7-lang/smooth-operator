@@ -5,8 +5,8 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default",
-    "process:default",
+    "os:allow-locale",
+    "process:allow-restart",
     "macos-permissions:default"
   ]
 }
