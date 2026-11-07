@@ -159,8 +159,9 @@ pub fn say(app: &AppHandle, text: &str) {
 pub fn navigation_selftest(app: &AppHandle) -> (usize, usize) {
     let before = (NAV_BLOCKED.load(Ordering::SeqCst), NEW_WINDOW_BLOCKED.load(Ordering::SeqCst));
     if let Some(win) = app.get_webview_window(LABEL) {
-        let _ = win.eval("try{window.open('https://example.com/')}catch(e){}");
-        let _ = win.eval("try{location='https://example.com/'}catch(e){}");
+        // data: URLs have no host, so the offline network check stays clean; both must be refused.
+        let _ = win.eval("try{window.open('data:text/plain,blocked')}catch(e){}");
+        let _ = win.eval("try{location='data:text/plain,blocked'}catch(e){}");
     }
     std::thread::sleep(std::time::Duration::from_millis(1500));
     (
