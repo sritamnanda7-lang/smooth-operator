@@ -200,7 +200,7 @@ tokio = { version = "1.43.0", features = ["macros", "net", "io-util", "sync", "t
 
 [features]
 # Spike-only code and the updater plugin. Off by default.
-spike = ["dep:tauri-plugin-updater"]
+spike = ["dep:tauri-plugin-updater", "tauri/devtools"]
 
 [profile.release]
 lto = true

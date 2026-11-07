@@ -1,0 +1,5 @@
+/* SPDX-License-Identifier: FSL-1.1-MIT */
+body { font: 14px -apple-system, "Segoe UI", sans-serif; margin: 16px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+button { padding: 6px 10px; }
+#out { margin-top: 16px; padding: 8px; border: 1px solid #888; min-height: 60px; white-space: pre-wrap; }

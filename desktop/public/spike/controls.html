@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: FSL-1.1-MIT -->
+<!-- Spike control window (step 0). Buttons call spike_* commands. Strict CSP from tauri.conf.json. -->
+<html lang="en"><head><meta charset="utf-8"><title>Spike harness</title>
+<link rel="stylesheet" href="/spike/controls.css"></head>
+<body>
+<h3>Smooth Operator spike harness</h3>
+<p>Hold or double-tap Fn/Globe or Right Cmd (Win: Right Ctrl). Fn/Cmd+Enter and Fn/Cmd+Esc are swallowed. Log: spike-harness.log in the app data folder.</p>
+<div class="row">
+  <button data-cmd="spike_stall">Stall 2 s (gate 6)</button>
+  <button data-cmd="spike_nav_test">Panel navigation test (gate 3)</button>
+  <button data-cmd="spike_preload">Preload model</button>
+  <button data-cmd="spike_unload">Unload model now</button>
+  <button data-cmd="spike_rss">Log RSS now</button>
+  <button data-cmd="spike_update">Check for update (gate 5)</button>
+</div>
+<pre id="out">ready</pre>
+<script src="/spike/controls.js"></script>
+</body></html>

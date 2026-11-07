@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "bundle": {
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIyMzAwMDFENjkwQzZGRApSV1Q5eHBEV0FRQWpDK0lSRCsrbVhIVmJ0c0trRGpFbG42L1ZNWU1VbFdacDZ3b2VXYUxjVzNWYgo=",
+      "endpoints": [
+        "http://127.0.0.1:8765/latest.json"
+      ],
+      "dangerousInsecureTransportProtocol": true
+    }
+  }
+}
