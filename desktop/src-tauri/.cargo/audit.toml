@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
+# cargo-audit config. Reasons for each ignore live in ../deny.toml (cargo-deny).
+[advisories]
+ignore = [
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+  "RUSTSEC-2026-0235",
+  "RUSTSEC-2026-0367",
+  "RUSTSEC-2026-0368",
+  "RUSTSEC-2026-0369",
+  "RUSTSEC-2026-0429",
+]
