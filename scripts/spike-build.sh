@@ -62,5 +62,7 @@ doc = {"version": version, "notes": "spike", "pub_date": datetime.datetime.now(d
        "platforms": {"darwin-aarch64": {"signature": sig, "url": url}}}
 open(path, "w").write(json.dumps(doc, indent=2) + "\n")
 PY
+# Never leave a runnable .app in the build tree (LaunchServices would launch it): Trash it.
+mv "$APP" "$HOME/.Trash/Smooth Operator-spike-$TAG-$$.app"
 echo "built: $OUT"
 ls -l "$OUT"

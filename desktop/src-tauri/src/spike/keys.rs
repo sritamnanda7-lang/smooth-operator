@@ -16,12 +16,12 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::AppHandle;
 
-/// (modifier, name shown in the panel). Defaults per CLAUDE.md: Mac Right Cmd / Right Opt;
-/// Windows Right Ctrl / Right Alt.
+/// (modifier, name shown in the panel). Mac: Fn/Globe (default) and Right Cmd (backup).
+/// Windows: Right Ctrl. Fn is reported by macOS as a modifier flag, so it needs no special path.
 #[cfg(target_os = "macos")]
-const TARGETS: [(Modifiers, &str); 2] = [(Modifiers::CMD_RIGHT, "Right Cmd"), (Modifiers::OPT_RIGHT, "Right Opt")];
+const TARGETS: [(Modifiers, &str); 2] = [(Modifiers::FN, "fn"), (Modifiers::CMD_RIGHT, "rcmd")];
 #[cfg(not(target_os = "macos"))]
-const TARGETS: [(Modifiers, &str); 2] = [(Modifiers::CTRL_RIGHT, "Right Ctrl"), (Modifiers::OPT_RIGHT, "Right Alt")];
+const TARGETS: [(Modifiers, &str); 1] = [(Modifiers::CTRL_RIGHT, "rctrl")];
 
 const SWALLOWED: [Key; 3] = [Key::Return, Key::KeypadEnter, Key::Escape];
 
@@ -33,13 +33,6 @@ pub fn start(app: AppHandle) {
                 set.insert(h);
             }
         }
-    }
-    // Windows only: also swallow the lone Right Alt press so Notepad shows no menu/key tips.
-    // (handy-keys injects its own "menu mask" key for this.) Not done on macOS: blocking a
-    // modifier press there would hide the press but not the release.
-    #[cfg(windows)]
-    if let Ok(h) = Hotkey::new(Modifiers::OPT_RIGHT, None) {
-        set.insert(h);
     }
     let blocking = Arc::new(Mutex::new(set));
     let listener = match KeyboardListener::new_with_blocking(blocking) {

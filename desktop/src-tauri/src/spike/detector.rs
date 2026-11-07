@@ -216,4 +216,37 @@ mod tests {
         let mut d = Detector::new(T);
         assert!(d.feed(&modev(Modifiers::CMD_LEFT, true, Modifiers::CMD_LEFT), t0).is_empty());
     }
+
+    #[test]
+    fn fn_hold_and_double_tap() {
+        let t0 = Instant::now();
+        let mut d = Detector::new(Modifiers::FN);
+        let f = Modifiers::FN;
+        assert_eq!(d.feed(&modev(f, true, f), t0), vec![Out::Down]);
+        assert_eq!(d.tick(t0 + ms(310)), vec![Out::Hold]);
+        assert_eq!(d.feed(&modev(Modifiers::empty(), false, f), t0 + ms(800)), vec![Out::HoldEnd]);
+        d.feed(&modev(f, true, f), t0 + ms(1000));
+        d.feed(&modev(Modifiers::empty(), false, f), t0 + ms(1060));
+        assert_eq!(d.feed(&modev(f, true, f), t0 + ms(1200)), vec![Out::Down, Out::DoubleTap]);
+    }
+
+    #[test]
+    fn fn_enter_does_not_cancel_hold() {
+        let t0 = Instant::now();
+        let mut d = Detector::new(Modifiers::FN);
+        let f = Modifiers::FN;
+        d.feed(&modev(f, true, f), t0);
+        d.feed(&keyev(f, Key::Return, true), t0 + ms(40));
+        d.feed(&keyev(f, Key::Escape, true), t0 + ms(50));
+        assert_eq!(d.tick(t0 + ms(320)), vec![Out::Hold]);
+    }
+
+    #[test]
+    fn fn_ignored_when_target_is_right_cmd() {
+        let t0 = Instant::now();
+        let mut d = Detector::new(T);
+        // Fn pressed first, then Right Cmd: Fn is not a "different modifier" for this target.
+        let m = T | Modifiers::FN;
+        assert_eq!(d.feed(&modev(m, true, T), t0), vec![Out::Down]);
+    }
 }
