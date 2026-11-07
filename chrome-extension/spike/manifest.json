@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Smooth Operator Spike",
+  "version": "0.0.1",
+  "description": "Step 0 spike: test connection to a local app on ws://127.0.0.1:51717.",
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Smooth Operator Spike", "default_popup": "popup.html" },
+  "permissions": ["storage"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
