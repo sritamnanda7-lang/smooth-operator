@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: FSL-1.1-MIT
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /desktop/src-tauri
+    schedule:
+      interval: weekly
+  - package-ecosystem: cargo
+    directory: /tests/strip-checks
+    schedule:
+      interval: weekly
+  - package-ecosystem: bun
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: bun
+    directory: /desktop
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
