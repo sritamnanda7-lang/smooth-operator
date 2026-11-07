@@ -3,10 +3,12 @@
 # Gate 9: how much of Handy core did we modify?  PASS = <=15 files and <1500 added lines.
 # Method (draft/step-0-plan.md gate 9): numstat vs base tag, rename-aware, only paths that
 # exist in the base tag, minus files listed in scripts/fork-size-exclude.txt. Lines = added
-# (column 1 of numstat); deletions are info only. Usage: scripts/fork-size.sh [HEAD-ref]
+# (column 1 of numstat); deletions are info only.
+# Usage: scripts/fork-size.sh [--base <ref>] [HEAD-ref]   (default base: handy-v0.10.0-base)
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 BASE=handy-v0.10.0-base
+if [ "${1:-}" = "--base" ]; then BASE=${2:?--base needs a ref}; shift 2; fi
 HEAD_REF=${1:-HEAD}
 MAX_FILES=15
 MAX_LINES=1500

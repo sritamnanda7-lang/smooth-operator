@@ -16,8 +16,8 @@ yanked = "warn"
 unmaintained = "workspace"
 # Every ignore needs a reason. Mirrored in .cargo/audit.toml (cargo-audit).
 ignore = [
-  { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.38 via tauri's plist crate. Parses only app-owned local plists (Info.plist, LaunchAgent); no network or user XML. No fix without a Tauri bump." },
-  { id = "RUSTSEC-2026-0195", reason = "Same as RUSTSEC-2026-0194 (quick-xml via plist); local trusted plists only." },
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.38 via the plist crate used at build time (tauri-codegen/tauri-utils). Parses only our own plists; no network or user XML. No fix without a Tauri bump." },
+  { id = "RUSTSEC-2026-0195", reason = "Same as RUSTSEC-2026-0194 (build-time tauri-codegen/tauri-utils plist)." },
   { id = "RUSTSEC-2026-0235", reason = "rkyv 0.7 is only an optional feature of rust_decimal (via byte-unit, tauri-plugin-log); feature is off, crate is not compiled (cargo tree -i rkyv is empty)." },
   { id = "RUSTSEC-2026-0367", reason = "zip 4.6 comes only from tauri-plugin-updater, which is optional (cargo feature `spike`, never in release builds). Extraction of untrusted archives is not reachable. Revisit at step 9 when the updater ships." },
   { id = "RUSTSEC-2026-0368", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
