@@ -1,8 +1,6 @@
 {
   "tray": {
     "settings": "Settings...",
-    "checkUpdates": "Check for Updates...",
-    "copyLastTranscript": "Copy Last Transcript",
     "unloadModel": "Unload Model",
     "model": "Model",
     "quit": "Quit",
@@ -16,8 +14,6 @@
     "general": "General",
     "models": "Models",
     "advanced": "Advanced",
-    "postProcessing": "Post Process",
-    "history": "History",
     "debug": "Debug",
     "about": "About"
   },
@@ -150,73 +146,10 @@
       "resumeLater": "Pick it again to pick up where it left off",
       "hint": "Downloads while you finish setup"
     },
-    "demo": {
-      "title": "Talk in any app, with one shortcut",
-      "hold": "<0>Click where you’d type.</0> <1>Hold your shortcut and talk.</1> <2>Let go, and your words appear.</2>",
-      "tap": "<0>Click where you’d type.</0> <1>Tap your shortcut and talk.</1> <2>Tap again, and your words appear.</2>",
-      "apps": {
-        "messages": "Messages",
-        "notes": "Notes"
-      },
-      "chat": "Are you still coming tonight?",
-      "noteTitle": "Weekend plans",
-      "screenLabel": "A laptop: someone clicks into an app, presses the shortcut and talks, and the words appear where they clicked.",
-      "change": "Change",
-      "yourShortcut": "Your shortcut is",
-      "pressKeys": "Press the new keys",
-      "addKey": "Now add a key",
-      "cancel": "Cancel",
-      "tryIt": "Try it yourself"
-    },
-    "try": {
-      "title": "Give it a try!",
-      "subtitle": "Handy's in the corner to help walk you through it",
-      "noteLabel": "Note",
-      "placeholder": "New note",
-      "hold": "Hold <keys/> and talk.",
-      "tapNext": "Now tap <keys/> once, then talk.",
-      "letGo": "Let go of <keys/> when you're done.",
-      "tapAgain": "Tap <keys/> again when you're done.",
-      "watch": "Watch the note.",
-      "changeKeys": "Change your shortcut, {{keys}}",
-      "doneHold": "High five! That's holding.",
-      "doneHoldNext": "Next, the hands-free way.",
-      "doneTap": "Up top! That's tapping.",
-      "doneTapNext": "Now try holding them while you talk.",
-      "giveFive": "You got it! Give me five",
-      "highFive": "High five",
-      "slowLine": "{{name}} took {{wait}} on this computer. <faster>Try a faster model</faster>",
-      "nothingTyped": "Hmm, nothing landed.",
-      "nothingTypedSub": "Click into the note first, then try again.",
-      "silent": "I didn't hear anything.",
-      "silentSub": "No sound came from this microphone. Try another:",
-      "noWords": "I didn't catch any words.",
-      "noWordsSub": "Try again, and say a whole sentence.",
-      "finish": "Finish",
-      "skip": "Skip",
-      "seconds": "{{value}}s"
-    },
-    "done": {
+    "allSet": {
       "title": "You're all set",
-      "subMac": "Handy's in your menu bar now. Hold or tap <keys/> in any app to talk.",
-      "subTray": "Handy's in your system tray now. Hold or tap <keys/> in any app to talk.",
-      "hint": "You can change these later in Settings",
-      "highFiveLabel": "High five",
-      "atLogin": "Start Handy when I log in",
-      "finish": "Done",
-      "panel": {
-        "name": "Handy",
-        "ready": "Ready",
-        "languages": "Languages",
-        "model": "Speech model",
-        "shortcut": "Shortcut",
-        "changeLanguages": "Change languages, {{languages}}",
-        "changeModel": "Change speech model, {{model}}"
-      }
-    },
-    "linux": {
-      "tryIt": "Not working? <guide>Linux setup guide</guide>",
-      "done": "Not working in other apps? <guide>Linux setup guide</guide>"
+      "body": "Smooth Operator is ready. More setup arrives in the next versions.",
+      "finish": "Finish"
     }
   },
   "modelTable": {
@@ -344,10 +277,6 @@
           "cancel": {
             "name": "Cancel Shortcut",
             "description": "The keyboard shortcut to cancel the current recording."
-          },
-          "transcribe_with_post_process": {
-            "name": "Post-Processing Hotkey",
-            "description": "Optional: A dedicated hotkey that always applies AI post-processing to your transcription."
           }
         },
         "errors": {
@@ -470,7 +399,6 @@
         "app": "App",
         "output": "Output",
         "transcription": "Transcription",
-        "history": "History",
         "experimental": "Experimental"
       },
       "experimentalToggle": {
@@ -533,10 +461,8 @@
           "clipboardCtrlShiftV": "Clipboard (Ctrl+Shift+V)",
           "clipboardShiftInsert": "Clipboard (Shift+Insert)",
           "direct": "Direct",
-          "none": "None",
-          "externalScript": "External Script"
-        },
-        "externalScriptPlaceholder": "/path/to/your/script.sh"
+          "none": "None"
+        }
       },
       "typingTool": {
         "title": "Typing Tool",
@@ -627,97 +553,6 @@
         }
       }
     },
-    "postProcessing": {
-      "hotkey": {
-        "title": "Hotkey"
-      },
-      "api": {
-        "title": "API",
-        "provider": {
-          "title": "Provider",
-          "description": "Select an OpenAI-compatible or Anthropic-compatible provider."
-        },
-        "apiFormat": {
-          "title": "API Format",
-          "description": "Request format expected by your custom endpoint.",
-          "options": {
-            "openai": "OpenAI Compatible (Chat Completions)",
-            "anthropic": "Anthropic Messages"
-          }
-        },
-        "appleIntelligence": {
-          "unavailable": "Apple Intelligence is not available on this device. Requires an Apple Silicon Mac running macOS Tahoe (26.0) or later with Apple Intelligence enabled in System Settings."
-        },
-        "baseUrl": {
-          "title": "Base URL",
-          "description": "API base URL for the selected provider. Only the custom provider can be edited.",
-          "placeholder": "https://api.openai.com/v1",
-          "placeholderAnthropic": "https://api.anthropic.com/v1"
-        },
-        "apiKey": {
-          "title": "API Key",
-          "description": "API key for the selected provider.",
-          "placeholder": "sk-..."
-        },
-        "model": {
-          "title": "Model",
-          "descriptionCustom": "Provide the model identifier expected by your custom endpoint.",
-          "descriptionDefault": "Choose a model exposed by the selected provider.",
-          "placeholderWithOptions": "Search or select a model",
-          "placeholderNoOptions": "Type a model name",
-          "refreshModels": "Refresh models"
-        }
-      },
-      "prompts": {
-        "title": "Prompt",
-        "selectedPrompt": {
-          "title": "Selected Prompt",
-          "description": "Select a template for refining transcriptions or create a new one. Use ${output} inside the prompt text to reference the captured transcript."
-        },
-        "noPrompts": "No prompts available",
-        "selectPrompt": "Select a prompt",
-        "createNew": "Create New Prompt",
-        "promptLabel": "Prompt Label",
-        "promptLabelPlaceholder": "Enter prompt name",
-        "promptInstructions": "Prompt Instructions",
-        "promptInstructionsPlaceholder": "Write the instructions to run after transcription. Example: Improve grammar and clarity for the following text: ${output}",
-        "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt.",
-        "updatePrompt": "Update Prompt",
-        "deletePrompt": "Delete Prompt",
-        "createPrompt": "Create Prompt",
-        "cancel": "Cancel",
-        "selectToEdit": "Select a prompt above to view and edit its details.",
-        "createFirst": "Click 'Create New Prompt' above to create your first post-processing prompt."
-      }
-    },
-    "history": {
-      "title": "History",
-      "openFolder": "Open Recordings Folder",
-      "loading": "Loading history...",
-      "empty": "No transcriptions yet. Start recording to build your history!",
-      "copyToClipboard": "Copy transcription to clipboard",
-      "copyError": "Failed to copy transcription to clipboard.",
-      "save": "Save transcription",
-      "unsave": "Remove from saved",
-      "delete": "Delete entry",
-      "deleteError": "Failed to delete entry. Please try again.",
-      "retranscribe": "Re-transcribe",
-      "cancelTranscription": "Cancel transcription",
-      "transcribing": "Transcribing...",
-      "transcriptionFailed": "Transcription failed. You can re-transcribe using the retry icon.",
-      "notTranscribed": "Not transcribed. You can transcribe it using the retry icon.",
-      "transcribeFile": "Transcribe File",
-      "mediaFiles": "Audio and video",
-      "fileUnsupported": "Couldn't read audio from {{name}}.",
-      "transcribeFailed": "Transcription failed. Please try again.",
-      "waiting": "Waiting to transcribe",
-      "transcribingPercent": "Transcribing, {{percent}}%",
-      "readingFile": "Reading file...",
-      "showMore": "Show more",
-      "showLess": "Show less",
-      "dropTitle": "Drop to transcribe",
-      "dropDescription": "It'll show up in History."
-    },
     "debug": {
       "title": "Debug",
       "logDirectory": {
@@ -739,16 +574,6 @@
         "lineCount": "{{count}} lines",
         "empty": "Waiting for logs… Entries appear here as the app emits them."
       },
-      "updateChecks": {
-        "label": "Check for Updates",
-        "description": "Automatically check for new versions of Handy",
-        "lockedDescription": "Disabled by system configuration (HANDY_DISABLE_UPDATER)"
-      },
-      "whatsNewPreview": {
-        "title": "Preview What's New",
-        "description": "Open the latest bundled release note without marking it as seen",
-        "button": "Preview"
-      },
       "onboardingPreview": {
         "title": "Preview Onboarding",
         "description": "Preview onboarding screens without changing permissions, models, or completion state",
@@ -758,8 +583,6 @@
           "welcome": "Welcome",
           "permissions": "Permissions",
           "model": "Model",
-          "demo": "Demo",
-          "try": "Try it",
           "done": "All set"
         }
       },
@@ -781,11 +604,6 @@
         "title": "Word Correction Threshold",
         "description": "Sensitivity for custom word corrections"
       },
-      "historyLimit": {
-        "title": "History Limit",
-        "description": "Maximum number of history entries to keep",
-        "entries": "entries"
-      },
       "recordingRetention": {
         "title": "Auto-Delete Recordings",
         "description": "Automatically delete old recordings to save space",
@@ -803,10 +621,6 @@
       "clamshellMicrophone": {
         "title": "Clamshell Microphone",
         "description": "Microphone to use when laptop lid is closed"
-      },
-      "postProcessingToggle": {
-        "label": "Post Processing",
-        "description": "Enable AI-powered text refinement after transcription"
       },
       "muteWhileRecording": {
         "label": "Mute While Recording",
@@ -872,23 +686,9 @@
         "title": "Version",
         "description": "Current version of Handy"
       },
-      "whatsNewUpdates": {
-        "label": "Show What's New",
-        "description": "Show release notes after Handy updates"
-      },
       "appDataDirectory": {
         "title": "App Data Directory",
         "description": "Location where Handy stores its data"
-      },
-      "sourceCode": {
-        "title": "Source Code",
-        "description": "View source code and contribute",
-        "button": "View on GitHub"
-      },
-      "supportDevelopment": {
-        "title": "Support Development",
-        "description": "Help us continue building Handy",
-        "button": "Donate"
       },
       "acknowledgments": {
         "title": "Acknowledgments",
@@ -901,22 +701,10 @@
     }
   },
   "footer": {
-    "checkingUpdates": "Checking for updates...",
-    "updateAvailableShort": "Update available",
     "upToDate": "Up to date",
-    "updateCheckingDisabled": "Update Checking Disabled",
     "downloading": "Downloading... {{progress}}%",
     "installing": "Installing...",
-    "preparing": "Preparing...",
-    "checkForUpdates": "Check for updates",
-    "portableUpdateTitle": "Manual update required",
-    "portableUpdateMessage": "Portable installs cannot be updated automatically. Download the installer for your system below, run it, and install to the same folder — your Data/ folder (settings, models, recordings) is kept in place.",
-    "portableUpdateButton": "Download installer",
-    "portableUpdateBrowseMessage": "Portable installs cannot be updated automatically. Download the latest version for your system from GitHub Releases and install it to the same folder — your Data/ folder (settings, models, recordings) is kept in place.",
-    "portableUpdateBrowseButton": "Open GitHub Releases"
-  },
-  "whatsNew": {
-    "title": "New in Handy v{{version}}"
+    "preparing": "Preparing..."
   },
   "common": {
     "playbackPosition": "Playback position",
@@ -946,10 +734,6 @@
     "modelDownloadFailed": "Download failed",
     "pasteFailedTitle": "Failed to Paste Text",
     "pasteFailed": "Text could not be pasted into the active application.",
-    "postProcessFailedTitle": "Pasted Without Post-Processing",
-    "postProcessFailed": "Post Process didn't finish, so the transcript was pasted as is.",
-    "filePostProcessFailedTitle": "Transcribed Without Post-Processing",
-    "filePostProcessFailed": "Post Process didn't finish, so the transcript was saved as is.",
     "fileTranscriptionFailedTitle": "File Transcription Failed",
     "transcriptionFailedTitle": "Transcription Failed"
   },

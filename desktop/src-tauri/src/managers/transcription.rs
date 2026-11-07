@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 use crate::audio_toolkit::chunking;
 use crate::audio_toolkit::{
     apply_custom_words, detect_output_language, normalize_transcription_output,
@@ -39,8 +41,6 @@ mod chunked;
 mod job;
 mod live;
 pub mod policy;
-
-pub use job::ChunkControl;
 
 const STREAM_PERF_LOG_INTERVAL: Duration = Duration::from_secs(5);
 

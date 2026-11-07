@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { platform } from "@tauri-apps/plugin-os";
@@ -25,9 +27,7 @@ import "./i18n";
 // Initialize model store (loads models and sets up event listeners)
 import { useModelStore } from "./stores/modelStore";
 import { useNoticeStore } from "./stores/noticeStore";
-import { useTranscriptionJobsStore } from "./stores/transcriptionJobsStore";
 useModelStore.getState().initialize();
-useTranscriptionJobsStore.getState().initialize();
 useNoticeStore.getState().initialize();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

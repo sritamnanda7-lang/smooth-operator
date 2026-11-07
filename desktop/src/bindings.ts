@@ -208,14 +208,6 @@ async changeTypingToolSetting(tool: string) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async changeExternalScriptPathSetting(path: string | null) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_external_script_path_setting", { path }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async changeClipboardHandlingSetting(handling: string) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_clipboard_handling_setting", { handling }) };
@@ -240,97 +232,9 @@ async changeAutoSubmitKeySetting(key: string) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async changePostProcessEnabledSetting(enabled: boolean) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_post_process_enabled_setting", { enabled }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async changeExperimentalEnabledSetting(enabled: boolean) : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("change_experimental_enabled_setting", { enabled }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async changePostProcessBaseUrlSetting(providerId: string, baseUrl: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_post_process_base_url_setting", { providerId, baseUrl }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async changePostProcessApiFormatSetting(providerId: string, apiFormat: PostProcessApiFormat) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_post_process_api_format_setting", { providerId, apiFormat }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async changePostProcessApiKeySetting(providerId: string, apiKey: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_post_process_api_key_setting", { providerId, apiKey }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async changePostProcessModelSetting(providerId: string, model: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_post_process_model_setting", { providerId, model }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async setPostProcessProvider(providerId: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("set_post_process_provider", { providerId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async fetchPostProcessModels(providerId: string) : Promise<Result<string[], string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("fetch_post_process_models", { providerId }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async addPostProcessPrompt(name: string, prompt: string) : Promise<Result<LLMPrompt, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("add_post_process_prompt", { name, prompt }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async updatePostProcessPrompt(id: string, name: string, prompt: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_post_process_prompt", { id, name, prompt }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async deletePostProcessPrompt(id: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_post_process_prompt", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async setPostProcessSelectedPrompt(id: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("set_post_process_selected_prompt", { id }) };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -439,30 +343,6 @@ async changeAppLanguageSetting(language: string) : Promise<Result<null, string>>
     else return { status: "error", error: e  as any };
 }
 },
-async changeUpdateChecksSetting(enabled: boolean) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_update_checks_setting", { enabled }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async changeShowWhatsNewOnUpdateSetting(enabled: boolean) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_show_whats_new_on_update_setting", { enabled }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async changeWhatsNewLastSeenVersionSetting(version: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("change_whats_new_last_seen_version_setting", { version }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 /**
  * Change the keyboard implementation with runtime switching.
  * This will unregister all shortcuts from the old implementation,
@@ -551,14 +431,6 @@ async runKeyboardDiagnostic(durationSecs: number | null) : Promise<Result<Keyboa
     else return { status: "error", error: e  as any };
 }
 },
-async triggerUpdateCheck() : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("trigger_update_check") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async showMainWindowCommand() : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("show_main_window_command") };
@@ -572,9 +444,6 @@ async cancelOperation() : Promise<void> {
 },
 async isPortable() : Promise<boolean> {
     return await TAURI_INVOKE("is_portable");
-},
-async isUpdateChecksLocked() : Promise<boolean> {
-    return await TAURI_INVOKE("is_update_checks_locked");
 },
 async getAppDirPath() : Promise<Result<string, string>> {
     try {
@@ -616,14 +485,6 @@ async setLogLevel(level: LogLevel) : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async openRecordingsFolder() : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("open_recordings_folder") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 async openLogDir() : Promise<Result<null, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("open_log_dir") };
@@ -639,13 +500,6 @@ async openAppDataDir() : Promise<Result<null, string>> {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
-},
-/**
- * Check if Apple Intelligence is available on this device.
- * Called by the frontend when the user selects Apple Intelligence provider.
- */
-async checkAppleIntelligenceAvailable() : Promise<boolean> {
-    return await TAURI_INVOKE("check_apple_intelligence_available");
 },
 /**
  * Try to initialize Enigo (keyboard/mouse simulation).
@@ -947,81 +801,6 @@ async unloadModelManually() : Promise<Result<null, string>> {
     else return { status: "error", error: e  as any };
 }
 },
-async getHistoryEntries(cursor: number | null, limit: number | null) : Promise<Result<PaginatedHistory, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_history_entries", { cursor, limit }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async toggleHistoryEntrySaved(id: number) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("toggle_history_entry_saved", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async getAudioFilePath(fileName: string) : Promise<Result<string, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("get_audio_file_path", { fileName }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async deleteHistoryEntry(id: number) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("delete_history_entry", { id }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Queues the entry to be transcribed again with the current model. Its
- * progress and outcome arrive as `TranscriptionJob` events.
- */
-async retryHistoryEntryTranscription(id: number) : Promise<void> {
-    await TAURI_INVOKE("retry_history_entry_transcription", { id });
-},
-/**
- * Stops the entry's background transcription: a queued one is dropped, a
- * running one stops after the chunk it is on. The entry keeps the text it
- * had before.
- */
-async cancelHistoryEntryTranscription(id: number) : Promise<void> {
-    await TAURI_INVOKE("cancel_history_entry_transcription", { id });
-},
-/**
- * Adds an audio or video file to History and queues its transcription.
- * Fails without adding anything if the file has no audio Handy can read.
- */
-async transcribeFile(path: string) : Promise<Result<HistoryEntry, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("transcribe_file", { path }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async updateHistoryLimit(limit: number) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_history_limit", { limit }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-async updateRecordingRetentionPeriod(period: string) : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("update_recording_retention_period", { period }) };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
 /**
  * Checks if the Mac is a laptop by detecting battery presence
  * 
@@ -1058,21 +837,13 @@ async dismissOverlayNotice() : Promise<void> {
 
 
 export const events = __makeEvents__<{
-historyUpdatePayload: HistoryUpdatePayload,
 noticesChanged: NoticesChanged,
-recordingStateEvent: RecordingStateEvent,
 streamPhaseEvent: StreamPhaseEvent,
-streamTextEvent: StreamTextEvent,
-transcriptionCompleteEvent: TranscriptionCompleteEvent,
-transcriptionJob: TranscriptionJob
+streamTextEvent: StreamTextEvent
 }>({
-historyUpdatePayload: "history-update-payload",
 noticesChanged: "notices-changed",
-recordingStateEvent: "recording-state-event",
 streamPhaseEvent: "stream-phase-event",
-streamTextEvent: "stream-text-event",
-transcriptionCompleteEvent: "transcription-complete-event",
-transcriptionJob: "transcription-job"
+streamTextEvent: "stream-text-event"
 })
 
 /** user-defined constants **/
@@ -1109,14 +880,7 @@ shortcut_activation?: ShortcutActivation;
  * Hold-or-toggle only: a press held at least this long is push-to-talk,
  * anything shorter is a tap that locks recording on.
  */
-hold_threshold_ms?: number; audio_feedback?: boolean; audio_feedback_volume?: number; sound_theme?: SoundTheme; start_hidden?: boolean; autostart_enabled?: boolean; update_checks_enabled?: boolean; show_whats_new_on_update?: boolean; 
-/**
- * The app version whose What's New the user has already seen. Fresh installs
- * default to the current version (nothing is "new" to them). Existing users
- * upgrading from before this key existed are blanked by the migration so they
- * see the current release's notes — see `apply_settings_migrations`.
- */
-whats_new_last_seen_version?: string; selected_model?: string; onboarding_completed?: boolean; always_on_microphone?: boolean; selected_microphone?: string | null; 
+hold_threshold_ms?: number; audio_feedback?: boolean; audio_feedback_volume?: number; sound_theme?: SoundTheme; start_hidden?: boolean; autostart_enabled?: boolean; selected_model?: string; onboarding_completed?: boolean; always_on_microphone?: boolean; selected_microphone?: string | null; 
 /**
  * Which input channel to use on the selected microphone device.
  * None means "average all channels" (original behavior).
@@ -1126,7 +890,7 @@ selected_channel?: number | null; clamshell_microphone?: string | null; selected
  * Every language the person dictates in (codes, e.g. ["en", "zh"]),
  * picked during onboarding. Empty until then.
  */
-spoken_languages?: string[]; overlay_position?: OverlayPosition; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; history_limit?: number; recording_retention_period?: RecordingRetentionPeriod; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; post_process_enabled?: boolean; post_process_provider_id?: string; post_process_providers?: PostProcessProvider[]; post_process_api_keys?: SecretMap; post_process_models?: Partial<{ [key in string]: string }>; post_process_prompts?: LLMPrompt[]; post_process_selected_prompt_id?: string | null; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; 
+spoken_languages?: string[]; overlay_position?: OverlayPosition; debug_mode?: boolean; log_level?: LogLevel; custom_words?: string[]; model_unload_timeout?: ModelUnloadTimeout; word_correction_threshold?: number; paste_method?: PasteMethod; clipboard_handling?: ClipboardHandling; auto_submit?: boolean; auto_submit_key?: AutoSubmitKey; mute_while_recording?: boolean; append_trailing_space?: boolean; app_language?: string; theme?: Theme; experimental_enabled?: boolean; lazy_stream_close?: boolean; 
 /**
  * Experimental, macOS only: move a Bluetooth headset (AirPods) to this
  * Mac while recording, so its microphone does not return silence while
@@ -1138,7 +902,7 @@ airpods_mode?: boolean; keyboard_implementation?: KeyboardImplementation; show_t
  * after the target app actually reads the transcript, instead of after a
  * fixed delay. See `paste_tx`. macOS and Windows only.
  */
-reliable_paste?: boolean; typing_tool?: TypingTool; external_script_path?: string | null; filler_word_removal_enabled?: boolean; custom_filler_words?: string[] | null; 
+reliable_paste?: boolean; typing_tool?: TypingTool; filler_word_removal_enabled?: boolean; custom_filler_words?: string[] | null; 
 /**
  * Fresh installs default from the OS locale; existing stores are migrated
  * in `apply_settings_migrations`.
@@ -1208,21 +972,6 @@ export type ChineseScript =
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
-export type HistoryEntry = { id: number; file_name: string; timestamp: number; saved: boolean; title: string; transcription_text: string; post_processed_text: string | null; post_process_prompt: string | null; post_process_requested: boolean; 
-/**
- * The name of the file this entry was transcribed from; `None` for a
- * dictation.
- */
-source_name: string | null; 
-/**
- * The language it was transcribed in, when known.
- */
-language: string | null; 
-/**
- * How that language was chosen; `None` before it was recorded.
- */
-language_source: LanguageSource | null }
-export type HistoryUpdatePayload = { action: "added"; entry: HistoryEntry } | { action: "updated"; entry: HistoryEntry } | { action: "deleted"; id: number } | { action: "toggled"; id: number }
 /**
  * Result of changing keyboard implementation
  */
@@ -1242,7 +991,6 @@ export type KeyboardImplementation = "tauri" | "handy_keys" |
  * (e.g. from a Wayland compositor keybinding).
  */
 "none"
-export type LLMPrompt = { id: string; name: string; prompt: string }
 /**
  * When Handy's spoken-language detector picks the language for Auto.
  */
@@ -1256,28 +1004,6 @@ export type LanguageDetectionMode =
  * the person speaks.
  */
 "always"
-/**
- * How a transcription's language was chosen.
- */
-export type LanguageSource = 
-/**
- * The person picked it, or it is the only language of theirs the model
- * supports.
- */
-"selected" | 
-/**
- * The model decides: its own detection, or its only language.
- */
-"model" | 
-/**
- * Handy's detector picked it.
- */
-"detected" | 
-/**
- * Handy had to pick without detecting (too little speech, detection
- * failed or unavailable, or Auto can't work for these languages).
- */
-"fallback"
 /**
  * What the language picker shows: the language a transcription will run in,
  * or Auto when it's decided per transcription. Derived from [`plan`], so it
@@ -1337,7 +1063,7 @@ detail: string | null }
 /**
  * The frontend maps each code to its text in `src/lib/notices.ts`.
  */
-export type NoticeCode = "TranscriptionFailed" | "PasteFailed" | "NoMicrophone" | "MicPermissionDenied" | "RecordingFailed" | "ModelLoadFailed" | "PostProcessFailed" | "FileTranscriptionFailed" | "FilePostProcessFailed"
+export type NoticeCode = "TranscriptionFailed" | "PasteFailed" | "NoMicrophone" | "MicPermissionDenied" | "RecordingFailed" | "ModelLoadFailed" | "FileTranscriptionFailed"
 export type NoticeLevel = 
 /**
  * Nothing came out, or Handy can't do its job.
@@ -1370,51 +1096,12 @@ export type OverlayPosition = "top" | "bottom"
  * streaming mode (that is driven purely by model capability).
  */
 export type OverlayStyle = "none" | "minimal" | "live"
-export type PaginatedHistory = { entries: HistoryEntry[]; has_more: boolean }
-export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v" | "external_script"
+export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
-/**
- * Request format a post-processing endpoint speaks. Built-in providers have a
- * fixed format; only the custom provider lets the user change it.
- */
-export type PostProcessApiFormat = 
-/**
- * OpenAI-compatible Chat Completions (`/chat/completions`)
- */
-"openai" | 
-/**
- * Anthropic Messages (`/messages`)
- */
-"anthropic"
-export type PostProcessProvider = { id: string; label: string; base_url: string; allow_base_url_edit?: boolean; models_endpoint?: string | null; supports_structured_output?: boolean; api_format?: PostProcessApiFormat }
-/**
- * Recording phase events for windows that follow along (onboarding's Try it).
- */
-export type RecordingPhase = 
-/**
- * Recording began.
- */
-"started" | 
-/**
- * The key came up before the hold threshold (or the binding toggles):
- * recording stays on until the next press.
- */
-"locked" | 
-/**
- * Recording ended; transcription follows.
- */
-"stopped" | 
-/**
- * The session was cancelled.
- */
-"cancelled"
-export type RecordingRetentionPeriod = "never" | "preserve_limit" | "days_3" | "weeks_2" | "months_3"
-export type RecordingStateEvent = { phase: RecordingPhase }
 /**
  * A retired ONNX model found on disk.
  */
 export type RetiredModel = { id: string; name: string; size_mb: number; replacement_repo: string }
-export type SecretMap = Partial<{ [key in string]: string }>
 export type SecureInputStatus = { 
 /**
  * Secure input is currently enabled (live check)
@@ -1505,47 +1192,6 @@ export type StreamWorkKind = "transcribing" | "polishing"
  */
 export type Theme = "system" | "light" | "dark"
 export type TranscribeAcceleratorSetting = "auto" | "cpu" | "gpu"
-/**
- * Emitted when a dictation finishes (not on cancel); onboarding uses it to measure speed.
- */
-export type TranscriptionCompleteEvent = { outcome: TranscriptionOutcome; audio_seconds: number; wait_seconds: number }
-/**
- * A background transcription of one History entry.
- */
-export type TranscriptionJob = { entry_id: number; status: TranscriptionJobStatus }
-export type TranscriptionJobStatus = 
-/**
- * Waiting behind another job.
- */
-{ state: "queued" } | 
-/**
- * `percent` of the audio is transcribed.
- */
-{ state: "running"; percent: number } | 
-/**
- * The entry has its new text, or the job was cancelled.
- */
-{ state: "finished" } | { state: "failed"; error: string }
-/**
- * How a dictation ended.
- */
-export type TranscriptionOutcome = 
-/**
- * The text was typed.
- */
-"typed" | 
-/**
- * Nothing was heard, so nothing was typed.
- */
-"empty" | 
-/**
- * The microphone sent only digital silence (e.g. muted).
- */
-"silent" | 
-/**
- * Transcribing or pasting failed.
- */
-"failed"
 export type TypingTool = "auto" | "wtype" | "kwtype" | "dotool" | "ydotool" | "xdotool"
 export type VadBackend = "silero" | "earshot"
 export type WindowsMicrophonePermissionStatus = { supported: boolean; overall_access: PermissionAccess; device_access: PermissionAccess; app_access: PermissionAccess; desktop_app_access: PermissionAccess }

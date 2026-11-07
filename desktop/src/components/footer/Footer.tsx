@@ -1,16 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React, { useState, useEffect } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 
 import ModelSelector from "../model-selector";
-import UpdateChecker from "../update-checker";
 import NoticeChip from "./NoticeChip";
-import TranscriptionStatus from "./TranscriptionStatus";
 
-interface FooterProps {
-  onShowHistory: () => void;
-}
-
-const Footer: React.FC<FooterProps> = ({ onShowHistory }) => {
+const Footer: React.FC = () => {
   const [version, setVersion] = useState("");
 
   useEffect(() => {
@@ -32,14 +28,10 @@ const Footer: React.FC<FooterProps> = ({ onShowHistory }) => {
       <div className="flex justify-between items-center text-xs px-4 pb-3 text-ink-2">
         <div className="flex items-center gap-4">
           <ModelSelector />
-          <TranscriptionStatus onShowHistory={onShowHistory} />
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Update Status */}
           <div className="flex items-center gap-1">
-            <UpdateChecker />
-            <span>•</span>
             {/* eslint-disable-next-line i18next/no-literal-string */}
             <span>v{version}</span>
           </div>

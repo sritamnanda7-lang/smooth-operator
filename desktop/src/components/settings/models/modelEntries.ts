@@ -1,9 +1,11 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 /** Models page data: the app's model list joined to the catalog by repo. */
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { create } from "zustand";
 import { useModelStore } from "@/stores/modelStore";
-import { areModelsLocked } from "@/stores/transcriptionJobsStore";
+import { areModelsLocked } from "@/so/modelsLocked";
 import { useSettings } from "@/hooks/useSettings";
 import { useModelCatalog } from "@/hooks/useModelCatalog";
 import { averageError, type Grading } from "@/lib/models/grading";

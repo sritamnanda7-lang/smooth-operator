@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! macOS Secure Event Input detection, monitoring, and fallback.
 //!
 //! When any process enables secure event input (password fields, Terminal's
@@ -478,9 +480,6 @@ mod imp {
         if eligible {
             for (id, binding) in &settings.bindings {
                 if id == "cancel" && !state.cancel_requested.load(Ordering::SeqCst) {
-                    continue;
-                }
-                if id == "transcribe_with_post_process" && !settings.post_process_enabled {
                     continue;
                 }
 

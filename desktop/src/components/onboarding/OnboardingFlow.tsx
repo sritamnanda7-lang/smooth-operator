@@ -1,4 +1,6 @@
-import React, { useEffect, useLayoutEffect, useRef } from "react";
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
+import React, { useEffect, useLayoutEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { commands, type ChineseScript } from "@/bindings";
 import { useSettings } from "@/hooks/useSettings";
@@ -14,15 +16,11 @@ import { isChinese } from "@/lib/utils/languageSuggestions";
 import { Welcome } from "./screens/Welcome";
 import { Permissions } from "./screens/Permissions";
 import { Model } from "./screens/Model";
-import { Demo } from "./screens/Demo";
-import { TryIt } from "./screens/TryIt";
+import { AllSet } from "@/so/AllSet";
 import { useOsType } from "@/hooks/useOsType";
-import { DownloadStatus } from "./DownloadStatus";
 import { useOnboardingModels } from "./useOnboardingModels";
 import { useModelStore } from "@/stores/modelStore";
-import { moveScreens } from "./screenTransitions";
 import { downloadPick } from "./downloadPick";
-import "./screenTransitions.css";
 
 interface OnboardingFlowProps {
   /** Debug preview: inert (no prompts, downloads or setting writes). */
@@ -93,17 +91,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     selectModel,
   ]);
 
-  // Demo and Try it teach hold and tap, which only hold_or_toggle supports;
-  // settings migrated from push_to_talk may still be Toggle or PushToTalk.
-  const activationSet = useRef(false);
-  const activation = settings?.shortcut_activation;
-  useEffect(() => {
-    if (preview || !activation || activationSet.current) return;
-    activationSet.current = true;
-    if (activation !== "hold_or_toggle")
-      updateSetting("shortcut_activation", "hold_or_toggle");
-  }, [preview, activation]);
-
   // Before first paint so a preview never shows the saved step.
   useLayoutEffect(() => {
     store.reset(preview);
@@ -171,11 +158,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       downloadId: id,
     });
   };
-  const downloadNow = preview
-    ? ({ state: "ready" } as const)
-    : models.downloadState(downloaded);
-  const modelReady = downloadNow.state === "ready";
-
   const saveLanguages = () => {
     if (preview) return;
     const { languages, script } = useOnboardingStore.getState();
@@ -214,41 +196,7 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
           onChoose={chooseModel}
         />
       );
-    case "demo":
-      return (
-        <Demo
-          progress={progress}
-          os={osType}
-          ready={modelReady}
-          downloadFailed={downloadNow.state === "failed"}
-          download={<DownloadStatus models={models} model={downloaded} />}
-          onRetry={() => downloaded && startModel(downloaded.id)}
-          onBack={back}
-          onContinue={() => moveScreens("in", next)}
-        />
-      );
-    // Same element for both steps, so Try it stays mounted into All set.
-    case "try":
     case "done":
-      return (
-        <TryIt
-          key="try"
-          progress={progress}
-          os={osType}
-          finished={step === "done"}
-          // Falls back to the selected model in a preview.
-          model={
-            downloaded ?? models.catalogFor(settings?.selected_model ?? "")
-          }
-          ready={modelReady}
-          download={<DownloadStatus models={models} model={downloaded} />}
-          onChangeModel={() => go("model")}
-          onEdit={(to) => store.set({ step: to, returnTo: "done" })}
-          onBack={() => moveScreens("out", back)}
-          onArrive={() => go("done")}
-          onUnfinish={() => go("try")}
-          onDone={finish}
-        />
-      );
+      return <AllSet progress={progress} onBack={back} onDone={finish} />;
   }
 };

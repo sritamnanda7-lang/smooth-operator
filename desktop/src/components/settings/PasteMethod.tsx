@@ -1,8 +1,9 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { Dropdown, type DropdownOption } from "../ui/Dropdown";
 import { SettingContainer } from "../ui/SettingContainer";
-import { Input } from "../ui/Input";
 import { useSettings } from "../../hooks/useSettings";
 import { useOsType } from "../../hooks/useOsType";
 import type { PasteMethod } from "@/bindings";
@@ -66,18 +67,8 @@ export const PasteMethodSetting: React.FC<PasteMethodProps> = React.memo(
         );
       }
 
-      // External script is only available on Linux
-      if (osType === "linux") {
-        options.push({
-          value: "external_script",
-          label: t("settings.advanced.pasteMethod.options.externalScript"),
-        });
-      }
-
       return options;
     };
-
-    const externalScriptPath = getSetting("external_script_path") || "";
 
     const pasteMethodOptions = getPasteMethodOptions(osType);
 
@@ -98,19 +89,6 @@ export const PasteMethodSetting: React.FC<PasteMethodProps> = React.memo(
             }
             disabled={isUpdating("paste_method")}
           />
-          {selectedMethod === "external_script" && (
-            <Input
-              type="text"
-              value={externalScriptPath}
-              onChange={(e) =>
-                updateSetting("external_script_path", e.target.value)
-              }
-              placeholder={t(
-                "settings.advanced.pasteMethod.externalScriptPlaceholder",
-              )}
-              disabled={isUpdating("external_script_path")}
-            />
-          )}
         </div>
       </SettingContainer>
     );

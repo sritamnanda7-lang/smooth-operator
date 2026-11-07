@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import {
-  useCallback,
   useEffect,
   useLayoutEffect,
   useState,
@@ -27,9 +28,7 @@ import {
 } from "./components/onboarding/onboardingStore";
 import { DebugSettings, ModelsSettings } from "./components/settings";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { FileDropOverlay } from "./components/FileDropOverlay";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
-import { WhatsNewGate } from "./components/whats-new";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
@@ -84,7 +83,6 @@ function App() {
   const [migrationModelId, setMigrationModelId] = useState<string | null>(null);
   const [currentSection, setCurrentSection] =
     useState<SidebarSection>("general");
-  const showHistory = useCallback(() => setCurrentSection("history"), []);
   const { settings, updateSetting } = useSettings();
   const direction = getLanguageDirection(i18n.language);
   const refreshAudioDevices = useSettingsStore(
@@ -321,9 +319,6 @@ function App() {
         dir={direction}
         className="h-screen flex flex-col select-none cursor-default"
       >
-        <ErrorBoundary context="What's New">
-          <WhatsNewGate />
-        </ErrorBoundary>
         {/* Main content area that takes remaining space */}
         <div className="flex-1 flex overflow-hidden">
           <Sidebar
@@ -350,8 +345,7 @@ function App() {
           </div>
         </div>
         {/* Fixed footer at bottom */}
-        <Footer onShowHistory={showHistory} />
-        <FileDropOverlay onDropped={showHistory} />
+        <Footer />
       </div>
     );
   }

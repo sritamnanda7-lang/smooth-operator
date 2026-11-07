@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "overlay",
+  "description": "Recording overlay: events and locale only. No process, opener or permission access.",
+  "windows": ["recording_overlay"],
+  "permissions": ["core:default", "os:allow-locale"]
+}

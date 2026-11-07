@@ -11,21 +11,16 @@
   },
   "app": {
     "macOSPrivateApi": true,
+    "withGlobalTauri": false,
     "windows": [],
     "security": {
-      "csp": null,
-      "assetProtocol": {
-        "enable": true,
-        "scope": {
-          "allow": ["**"],
-          "requireLiteralLeadingDot": false
-        }
-      }
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' data:; font-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+      "devCsp": "default-src 'self'; connect-src ipc: http://ipc.localhost http://localhost:1420 ws://localhost:1420 ws://localhost:1421; img-src 'self' data:; font-src 'self' data:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'"
     }
   },
   "bundle": {
     "active": true,
-    "createUpdaterArtifacts": true,
+    "createUpdaterArtifacts": false,
     "targets": "all",
     "resources": ["resources/**/*"],
     "license": "MIT",
@@ -43,50 +38,11 @@
       "signingIdentity": "-",
       "entitlements": "Entitlements.plist"
     },
-    "linux": {
-      "deb": {
-        "depends": [
-          "libgtk-layer-shell0",
-          "libopenblas0",
-          "libssl3t64 | libssl3"
-        ],
-        "files": {
-          "/usr/lib/Handy": "transcribe-libs"
-        }
-      },
-      "rpm": {
-        "depends": [
-          "libgtk-layer-shell.so.0()(64bit)",
-          "libopenblas.so.0()(64bit)"
-        ],
-        "compression": {
-          "type": "none"
-        },
-        "files": {
-          "/usr/lib/Handy": "transcribe-libs"
-        }
-      },
-      "appimage": {
-        "bundleMediaFramework": true,
-        "files": {
-          "/usr/lib": "transcribe-libs"
-        }
-      }
-    },
     "windows": {
-      "signCommand": "trusted-signing-cli -e https://eus.codesigning.azure.net/ -a CJ-Signing -c cjpais-dev -d Handy %1",
       "nsis": {
         "template": "nsis/installer.nsi",
         "installerIcon": "icons/icon.ico"
       }
-    }
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJBQjcyMDk1MjA2NjAxRjkKUldUNUFXWWdsU0MzdXRRZi8zYzhqV2FaNUVDbDd2Rk5VM1IvWWowVXdmRFNKQ1BrMXF5RFFsLy8K",
-      "endpoints": [
-        "https://github.com/cjpais/Handy/releases/latest/download/latest.json"
-      ]
     }
   }
 }

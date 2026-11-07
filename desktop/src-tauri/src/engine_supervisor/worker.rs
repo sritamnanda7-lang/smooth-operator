@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! The worker process: the only place transcribe.cpp native code runs. Owns
 //! the model, session and stream, and serves [`Request`]s until the parent
 //! closes its stdin.
@@ -33,8 +35,6 @@ pub fn run() -> i32 {
     // The worker owns the per-run engine scratch, so it needs the same glibc
     // tuning as the app (#1792). Before anything allocates.
     crate::memory::init_allocator();
-    #[cfg(unix)]
-    ignore_app_signals();
     #[cfg(target_os = "linux")]
     set_process_name();
     // Take the real stdout for the protocol before any native code runs, and
@@ -277,7 +277,7 @@ fn load(
                 .into_iter()
                 .find(|d| d.index == Some(index))
                 .ok_or_else(|| {
-                    format!("No compute device with index {index} (see --list-devices)")
+                    format!("No compute device with index {index}")
                 })?;
             if matches!(device.device_type, DeviceType::Accel | DeviceType::Unknown) {
                 return Err(format!(
@@ -413,18 +413,6 @@ fn init_logger() {
         .unwrap_or(LevelFilter::Info);
     if log::set_logger(&LOGGER).is_ok() {
         log::set_max_level(level);
-    }
-}
-
-/// SIGUSR2 toggles transcription in the app (and WebKitGTK uses SIGUSR1).
-/// Aimed at Handy by name, e.g. the README's `pkill -USR2 -n handy`, one
-/// can reach this worker instead, and its default action would kill it.
-#[cfg(unix)]
-fn ignore_app_signals() {
-    // SAFETY: setting a signal's disposition to SIG_IGN has no preconditions.
-    unsafe {
-        libc::signal(libc::SIGUSR1, libc::SIG_IGN);
-        libc::signal(libc::SIGUSR2, libc::SIG_IGN);
     }
 }
 

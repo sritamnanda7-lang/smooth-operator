@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import { create } from "zustand";
 import {
   CHINESE_SCRIPTS,
@@ -10,16 +12,12 @@ export type OnboardingStep =
   | "welcome"
   | "permissions"
   | "model"
-  | "demo"
-  | "try"
   | "done";
 
 export const STEP_ORDER: OnboardingStep[] = [
   "welcome",
   "permissions",
   "model",
-  "demo",
-  "try",
   "done",
 ];
 

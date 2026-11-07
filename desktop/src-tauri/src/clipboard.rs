@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 use crate::input::{self, EnigoState};
 #[cfg(target_os = "linux")]
 use crate::settings::TypingTool;
 use crate::settings::{get_settings, AutoSubmitKey, ClipboardHandling, PasteMethod};
 use enigo::{Direction, Enigo, Key, Keyboard};
 use log::info;
+#[cfg(target_os = "linux")]
 use std::process::Command;
 #[cfg(target_os = "linux")]
 use std::sync::OnceLock;
@@ -720,36 +723,6 @@ fn send_key_combo_via_xdotool(paste_method: &PasteMethod) -> Result<(), String> 
     Ok(())
 }
 
-/// Pastes text by invoking an external script.
-/// The script receives the text to paste as a single argument.
-fn paste_via_external_script(text: &str, script_path: &str) -> Result<(), String> {
-    info!("Pasting via external script: {}", script_path);
-
-    // Do not capture the script's stdio. Wayland clipboard helpers such as
-    // wl-copy may fork a background selection daemon that inherits those file
-    // descriptors; waiting for captured output would then block until the
-    // clipboard selection is replaced instead of returning after the script
-    // itself exits.
-    use std::process::Stdio;
-    let status = Command::new(script_path)
-        .arg(text)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map_err(|e| format!("Failed to execute external script '{}': {}", script_path, e))?;
-
-    if !status.success() {
-        return Err(format!(
-            "External script '{}' failed with exit code {:?}",
-            script_path,
-            status.code()
-        ));
-    }
-
-    Ok(())
-}
-
 /// Types text directly by simulating individual key presses.
 fn paste_direct(
     text: &str,
@@ -891,14 +864,6 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
                 paste_delay_ms,
                 paste_delay_after_ms,
             )?
-        }
-        PasteMethod::ExternalScript => {
-            let script_path = settings
-                .external_script_path
-                .as_ref()
-                .filter(|p| !p.is_empty())
-                .ok_or("External script path is not configured")?;
-            paste_via_external_script(&text, script_path)?;
         }
     }
 
@@ -1050,41 +1015,4 @@ e.g. 28:1 28:0 means pressing on the Enter button on a standard US keyboard.
         assert!(restored.get());
     }
 
-    #[cfg(unix)]
-    #[test]
-    fn external_script_does_not_wait_for_inherited_stdio() {
-        use std::fs;
-        use std::os::unix::fs::PermissionsExt;
-        use std::sync::mpsc;
-        use std::thread;
-
-        let script_path = std::env::temp_dir().join(format!(
-            "handy-external-script-{}-{}.sh",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .expect("system clock should be after UNIX_EPOCH")
-                .as_nanos()
-        ));
-        fs::write(&script_path, "#!/bin/sh\nsleep 3 &\nexit 0\n").expect("write external script");
-        let mut permissions = fs::metadata(&script_path)
-            .expect("read external script metadata")
-            .permissions();
-        permissions.set_mode(0o700);
-        fs::set_permissions(&script_path, permissions).expect("make external script executable");
-
-        let (sender, receiver) = mpsc::channel();
-        let script_path_for_thread = script_path.clone();
-        thread::spawn(move || {
-            let result =
-                paste_via_external_script("test", script_path_for_thread.to_str().unwrap());
-            sender.send(result).expect("send script result");
-        });
-
-        let result = receiver
-            .recv_timeout(Duration::from_secs(1))
-            .expect("external script should return without waiting for its child");
-        fs::remove_file(script_path).expect("remove external script");
-        assert!(result.is_ok());
-    }
 }
