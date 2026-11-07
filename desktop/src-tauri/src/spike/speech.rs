@@ -12,8 +12,15 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
-/// Parakeet V3 in Handy's model catalog.
-const MODEL_ID: &str = "parakeet-tdt-0.6b-v3";
+/// Parakeet V3 file (Q8_0). Handy registers HF models under "<repo>/<file>", not the short
+/// catalog id, so the registered id is looked up by file name (see `pick_model`).
+const MODEL_FILE: &str = "parakeet-tdt-0.6b-v3-Q8_0.gguf";
+
+/// Registered id of the downloaded Parakeet V3 model: `(id, filename, is_downloaded)` rows in,
+/// the id of the first downloaded row with that file name out.
+fn pick_model(rows: &[(String, String, bool)]) -> Option<String> {
+    rows.iter().find(|(_, f, d)| *d && f == MODEL_FILE).map(|(id, _, _)| id.clone())
+}
 const BINDING: &str = "spike";
 /// Spike value so a test run does not wait minutes. The product value is decided in step 2.
 const IDLE_UNLOAD_SECS: u64 = 20;
@@ -50,15 +57,25 @@ pub fn preload(app: &AppHandle) {
         let _ = rm.preload_vad();
         super::harness::with_rss("g8", "rss_preload", None, super::rss::tree_kb());
         let t = Instant::now();
-        match tm.load_model(MODEL_ID) {
+        let rows: Vec<(String, String, bool)> = app
+            .state::<Arc<crate::managers::model::ModelManager>>()
+            .get_available_models()
+            .into_iter()
+            .map(|m| (m.id, m.filename, m.is_downloaded))
+            .collect();
+        let result = match pick_model(&rows) {
+            Some(id) => tm.load_model(&id),
+            None => Err(anyhow::anyhow!("Parakeet V3 ({MODEL_FILE}) is not downloaded")),
+        };
+        match result {
             Ok(()) => {
                 let ms = t.elapsed().as_millis();
                 super::harness::with_rss("g8", "model_loaded", Some(ms), super::rss::tree_kb());
                 super::panel::say(&app, &format!("model loaded {ms} ms"));
             }
-            Err(_) => {
-                super::harness::event("g8", "model_load_failed");
-                super::panel::say(&app, "model load failed (download Parakeet V3 in Settings > Models)");
+            Err(e) => {
+                super::harness::failed("g8", "model_load_failed", &format!("{e:#}"));
+                super::panel::say(&app, &format!("model load failed: {e:#}"));
             }
         }
     });
@@ -73,9 +90,9 @@ pub fn on_hold(app: &AppHandle) {
             RECORDING.store(true, Ordering::SeqCst);
             super::harness::event("g8", "recording_start");
         }
-        Err(_) => {
-            super::harness::event("g8", "recording_start_failed");
-            super::panel::say(app, "microphone failed (permission?)");
+        Err(e) => {
+            super::harness::failed("g8", "recording_start_failed", &format!("{e:#}"));
+            super::panel::say(app, &format!("recording failed: {e:#}"));
         }
     }
 }
@@ -100,9 +117,9 @@ pub fn on_release(app: &AppHandle, released: Instant) {
                 super::harness::timed_n("g8", "release_to_text", ms, text.chars().count() as u64);
                 super::panel::say(&app, &format!("{ms} ms: {text}"));
             }
-            Err(_) => {
-                super::harness::event("g8", "transcribe_failed");
-                super::panel::say(&app, "transcribe failed");
+            Err(e) => {
+                super::harness::failed("g8", "transcribe_failed", &format!("{e:#}"));
+                super::panel::say(&app, &format!("transcribe failed: {e:#}"));
             }
         }
         touch();
@@ -131,4 +148,30 @@ pub fn start_idle_watcher(app: AppHandle) {
             unload(&app);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pick_model;
+
+    fn row(id: &str, file: &str, d: bool) -> (String, String, bool) {
+        (id.into(), file.into(), d)
+    }
+
+    #[test]
+    fn finds_registered_id_by_file_name() {
+        let rows = vec![
+            row("whisper-small", "ggml-small.bin", true),
+            row("handy-computer/parakeet-tdt-0.6b-v3-gguf/parakeet-tdt-0.6b-v3-Q8_0.gguf", MODEL_FILE_T, true),
+        ];
+        assert_eq!(pick_model(&rows).as_deref(), Some("handy-computer/parakeet-tdt-0.6b-v3-gguf/parakeet-tdt-0.6b-v3-Q8_0.gguf"));
+    }
+
+    #[test]
+    fn ignores_not_downloaded_and_missing() {
+        assert_eq!(pick_model(&[row("x", MODEL_FILE_T, false)]), None);
+        assert_eq!(pick_model(&[]), None);
+    }
+
+    const MODEL_FILE_T: &str = "parakeet-tdt-0.6b-v3-Q8_0.gguf";
 }
