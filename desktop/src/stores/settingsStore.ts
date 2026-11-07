@@ -124,9 +124,6 @@ const settingUpdaters: {
   typing_tool: (value) => commands.changeTypingToolSetting(value as string),
   clipboard_handling: (value) =>
     commands.changeClipboardHandlingSetting(value as string),
-  auto_submit: (value) => commands.changeAutoSubmitSetting(value as boolean),
-  auto_submit_key: (value) =>
-    commands.changeAutoSubmitKeySetting(value as string),
   mute_while_recording: (value) =>
     commands.changeMuteWhileRecordingSetting(value as boolean),
   append_trailing_space: (value) =>

@@ -171,15 +171,6 @@ pub enum ChineseScript {
     TraditionalHk,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum AutoSubmitKey {
-    #[default]
-    Enter,
-    CtrlEnter,
-    CmdEnter,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum KeyboardImplementation {
@@ -386,10 +377,6 @@ pub struct AppSettings {
     pub paste_method: PasteMethod,
     #[serde(default)]
     pub clipboard_handling: ClipboardHandling,
-    #[serde(default = "default_auto_submit")]
-    pub auto_submit: bool,
-    #[serde(default)]
-    pub auto_submit_key: AutoSubmitKey,
     #[serde(default)]
     pub mute_while_recording: bool,
     #[serde(default)]
@@ -559,10 +546,6 @@ fn default_paste_delay_after_ms() -> u64 {
     60
 }
 
-fn default_auto_submit() -> bool {
-    false
-}
-
 fn default_audio_feedback_volume() -> f32 {
     1.0
 }
@@ -653,8 +636,6 @@ pub fn get_default_settings() -> AppSettings {
         word_correction_threshold: default_word_correction_threshold(),
         paste_method: PasteMethod::default(),
         clipboard_handling: ClipboardHandling::default(),
-        auto_submit: default_auto_submit(),
-        auto_submit_key: AutoSubmitKey::default(),
         mute_while_recording: false,
         append_trailing_space: false,
         app_language: default_app_language(),
@@ -1078,8 +1059,6 @@ mod tests {
             "word_correction_threshold": 0.18,
             "paste_method": "ctrl_v",
             "clipboard_handling": "dont_modify",
-            "auto_submit": false,
-            "auto_submit_key": "enter",
             "mute_while_recording": false,
             "append_trailing_space": false,
             "app_language": "en",
@@ -1224,17 +1203,6 @@ mod tests {
                 default_settings_json()
             );
         }
-    }
-
-    #[test]
-    fn default_settings_disable_auto_submit() {
-        let settings = get_default_settings();
-        assert!(!settings.auto_submit);
-        assert_eq!(settings.auto_submit_key, AutoSubmitKey::Enter);
-        assert_eq!(
-            settings.settings_schema_version,
-            CURRENT_SETTINGS_SCHEMA_VERSION
-        );
     }
 
     #[cfg(not(target_os = "linux"))]

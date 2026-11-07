@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::settings::{
-    self, get_settings, AutoSubmitKey, ChineseScript, ClipboardHandling, KeyboardImplementation,
+    self, get_settings, ChineseScript, ClipboardHandling, KeyboardImplementation,
     LanguageDetectionMode, OverlayPosition, OverlayStyle, PasteMethod,
     ShortcutActivation, ShortcutBinding, SoundTheme, Theme, TypingTool, VadBackend,
 };
@@ -54,7 +54,7 @@ pub fn init_shortcuts(app: &AppHandle) {
             }
         }
         KeyboardImplementation::None => {
-            info!("Built-in keyboard shortcuts disabled; use CLI flags or signals");
+            info!("Built-in keyboard shortcuts disabled");
         }
     }
 }
@@ -985,33 +985,6 @@ pub fn change_clipboard_handling_setting(app: AppHandle, handling: String) -> Re
         }
     };
     settings.clipboard_handling = parsed;
-    settings::write_settings(&app, settings);
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_auto_submit_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    settings.auto_submit = enabled;
-    settings::write_settings(&app, settings);
-    Ok(())
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn change_auto_submit_key_setting(app: AppHandle, key: String) -> Result<(), String> {
-    let mut settings = settings::get_settings(&app);
-    let parsed = match key.as_str() {
-        "enter" => AutoSubmitKey::Enter,
-        "ctrl_enter" => AutoSubmitKey::CtrlEnter,
-        "cmd_enter" => AutoSubmitKey::CmdEnter,
-        other => {
-            warn!("Invalid auto submit key '{}', defaulting to enter", other);
-            AutoSubmitKey::Enter
-        }
-    };
-    settings.auto_submit_key = parsed;
     settings::write_settings(&app, settings);
     Ok(())
 }

@@ -433,8 +433,6 @@ pub fn run(cli_args: CliArgs) {
             shortcut::get_available_typing_tools,
             shortcut::change_typing_tool_setting,
             shortcut::change_clipboard_handling_setting,
-            shortcut::change_auto_submit_setting,
-            shortcut::change_auto_submit_key_setting,
             shortcut::change_experimental_enabled_setting,
             shortcut::update_custom_words,
             shortcut::suspend_all_bindings,
@@ -537,7 +535,7 @@ pub fn run(cli_args: CliArgs) {
                 // Key path: never above Info, even with --debug / Trace, so no
                 // key event detail can reach a log (our shortcut code and the crate).
                 .level_for("handy_keys", log::LevelFilter::Info)
-                .level_for("handy_app_lib::shortcut::handy_keys", log::LevelFilter::Info)
+                .level_for("handy_app_lib::shortcut", log::LevelFilter::Info)
                 .max_file_size(500_000)
                 .rotation_strategy(RotationStrategy::KeepOne)
                 .clear_targets()

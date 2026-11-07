@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! macOS reliable paste.
 //!
 //! Publishes the transcript with `declareTypes:owner:`, which puts a *promise*
@@ -21,13 +23,11 @@ use objc2::rc::Retained;
 use objc2::{define_class, msg_send, AnyThread, DefinedClass};
 use objc2_app_kit::{NSPasteboard, NSPasteboardTypeString};
 use objc2_foundation::{NSArray, NSInteger, NSObject, NSString};
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 
 use super::{evaluate, send_chord, TxState, WaitDecision};
-use crate::clipboard::send_return_key;
-use crate::input::EnigoState;
-use crate::settings::{AutoSubmitKey, ClipboardHandling, PasteMethod};
+use crate::settings::{ClipboardHandling, PasteMethod};
 
 /// Concealment marker types declared alongside the text so that well-behaved
 /// third-party clipboard managers (Maccy, Paste, ...) skip the transcript.
@@ -99,8 +99,6 @@ struct MacPending {
     saved_image: Option<tauri::image::Image<'static>>,
     change_count: NSInteger,
     provider: Option<Retained<HandyPasteProvider>>,
-    auto_submit: bool,
-    auto_submit_key: AutoSubmitKey,
     /// ClipboardHandling::CopyToClipboard — instead of restoring, settle by
     /// re-writing the transcript as plain text (without the concealment
     /// markers), so clipboard managers record it and it outlives the promise.
@@ -114,14 +112,13 @@ struct MacPending {
 /// settles it before snapshotting (see `flush_pending`).
 static PENDING: Mutex<Option<Arc<Mutex<MacPending>>>> = Mutex::new(None);
 
-/// Settles a transaction exactly once: sends the owed auto-submit Enter and
-/// restores the previous clipboard, guarded so we never clobber a newer copy.
+/// Settles a transaction exactly once: restores the previous clipboard, guarded so we never clobber a newer copy.
 /// Must run on the main thread. Uses the already-locked enigo when called
 /// from within `paste` (which holds the lock), otherwise locks it itself.
 fn settle(
     pending: &Arc<Mutex<MacPending>>,
     app_handle: &AppHandle,
-    enigo: Option<&mut enigo::Enigo>,
+    _enigo: Option<&mut enigo::Enigo>,
 ) {
     let mut p = match pending.lock() {
         Ok(p) => p,
@@ -132,27 +129,10 @@ fn settle(
     }
     p.settled = true;
 
-    let (receipt_seen, ownership_lost) = match p.state.lock() {
-        Ok(st) => (st.any_receipt_after_injection(), st.ownership_lost),
-        Err(_) => (false, true),
+    let ownership_lost = match p.state.lock() {
+        Ok(st) => st.ownership_lost,
+        Err(_) => true,
     };
-
-    // Auto-submit only once the target demonstrably read the transcript;
-    // pressing Enter after an unconfirmed paste could submit stale content.
-    if p.auto_submit && receipt_seen {
-        match enigo {
-            Some(e) => {
-                let _ = send_return_key(e, p.auto_submit_key);
-            }
-            None => {
-                if let Some(enigo_state) = app_handle.try_state::<EnigoState>() {
-                    if let Ok(mut e) = enigo_state.0.lock() {
-                        let _ = send_return_key(&mut e, p.auto_submit_key);
-                    }
-                }
-            }
-        }
-    }
 
     let still_ours =
         !ownership_lost && NSPasteboard::generalPasteboard().changeCount() == p.change_count;
@@ -258,8 +238,6 @@ pub(super) fn run(
     app_handle: &AppHandle,
     paste_method: &PasteMethod,
     enigo: &mut enigo::Enigo,
-    auto_submit: bool,
-    auto_submit_key: AutoSubmitKey,
     clipboard_handling: ClipboardHandling,
 ) -> Result<(), String> {
     // Settle any previous transaction first so the snapshot below captures the
@@ -321,8 +299,6 @@ pub(super) fn run(
         saved_image,
         change_count,
         provider: Some(provider),
-        auto_submit,
-        auto_submit_key,
         preserve_transcript: clipboard_handling == ClipboardHandling::CopyToClipboard,
         transcript: text.to_string(),
         settled: false,
