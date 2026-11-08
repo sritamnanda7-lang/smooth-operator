@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
 //! Step 2: speech-to-text. Tests: `so/tests/{stt_tests,stt_model_tests,wer_tests}.rs`.
-//!
-//! STEP-2 STUBS: the modules below declare the interfaces the tests use. Bodies marked `todo!()` are
-//! for the builder (sub-step 4/5). Remove the `expect` below when the code is wired in (step-1 check S5
-//! forbids a blanket allow of dead code under `so/`; unused stubs only warn outside tests).
-#![cfg_attr(not(test), expect(dead_code))]
 
 pub mod metrics;
 pub mod model;
@@ -14,9 +9,15 @@ pub mod sink;
 pub mod tap;
 pub mod wer;
 
-use crate::settings::AppSettings;
+use crate::managers::audio::AudioRecordingManager;
+use crate::managers::model::ModelManager;
+use crate::managers::transcription::TranscriptionManager;
+use crate::settings::{get_settings, write_settings, AppSettings, ModelUnloadTimeout};
+use crate::so::hotkey::watcher::TalkSink;
+use crate::so::settings::{self as so_settings, Platform};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 /// Where the microphone opens. One constant (test S8): `Down` = on the clean hotkey press (founder Q1),
 /// `Started` = only after the 300 ms hold.
@@ -38,16 +39,68 @@ pub const HEARD_SECS: u64 = 4;
 /// Recorder binding name.
 pub const BINDING: &str = "so-talk";
 
-/// STEP-2 STUB (`todo!()`): force the launch settings on `settings` and return true if anything
-/// changed (false when already right, so it is idempotent): `selected_model = model::SO_MODEL_ID`,
-/// `selected_language = "en"`, `model_unload_timeout = Min2`, `always_on_microphone = false`,
-/// `lazy_stream_close = false`.
-pub fn enforce_settings(_settings: &mut AppSettings) -> bool {
-    todo!("step 2: enforce_settings")
+/// The speech sink, once `setup` built it. The key watcher takes it from here when it starts.
+static SINK: OnceLock<Arc<dyn TalkSink>> = OnceLock::new();
+
+/// The sink the key watcher should use, if speech is set up.
+pub fn talk_sink() -> Option<Arc<dyn TalkSink>> {
+    SINK.get().cloned()
 }
 
-/// STEP-2 STUB (`todo!()`): called once from Handy's setup: enforce settings, build the SpeechSink and
-/// its worker, and hand it to the hotkey watcher.
-pub fn setup(_app: &AppHandle) {
-    todo!("step 2: stt::setup")
+/// Force the launch settings on `settings` and return true if anything changed (false when already
+/// right, so it is idempotent): `selected_model = model::SO_MODEL_ID`, `selected_language = "en"`,
+/// `model_unload_timeout = Min2` (Handy's idle watcher then unloads 120-130 s after last use),
+/// `always_on_microphone = false` (the mic is open only during a talk) and
+/// `lazy_stream_close = false` (it closes at once after a talk).
+pub fn enforce_settings(settings: &mut AppSettings) -> bool {
+    let mut changed = false;
+    if settings.selected_model != model::SO_MODEL_ID {
+        settings.selected_model = model::SO_MODEL_ID.to_string();
+        changed = true;
+    }
+    if settings.selected_language != "en" {
+        settings.selected_language = "en".to_string();
+        changed = true;
+    }
+    if settings.model_unload_timeout != ModelUnloadTimeout::Min2 {
+        settings.model_unload_timeout = ModelUnloadTimeout::Min2;
+        changed = true;
+    }
+    if settings.always_on_microphone {
+        settings.always_on_microphone = false;
+        changed = true;
+    }
+    if settings.lazy_stream_close {
+        settings.lazy_stream_close = false;
+        changed = true;
+    }
+    changed
+}
+
+/// Called once from our setup (after Handy's managers exist): enforce the settings, build the
+/// speech sink and keep it for the key watcher. If a manager is missing, speech stays off and the
+/// watcher falls back to the plain panel sink.
+pub fn setup(app: &AppHandle) {
+    let mut settings = get_settings(app);
+    if enforce_settings(&mut settings) {
+        write_settings(app, settings);
+    }
+    let (Some(rec), Some(tr), Some(models)) = (
+        app.try_state::<Arc<AudioRecordingManager>>(),
+        app.try_state::<Arc<TranscriptionManager>>(),
+        app.try_state::<Arc<ModelManager>>(),
+    ) else {
+        return;
+    };
+    let app_for_hotkey = app.clone();
+    let sink = sink::SpeechSink::new(
+        Arc::new(real::RealRecorder::new(rec.inner().clone())),
+        Arc::new(real::RealTranscriber::new(tr.inner().clone(), models.inner().clone())),
+        crate::so::panel::panel_out(app),
+        Arc::new(crate::so::hotkey::SystemClock),
+        Arc::new(tap::StaticTap),
+        Arc::new(real::WatcherStopper),
+        Box::new(move || so_settings::load_hotkey(&app_for_hotkey, Platform::current())),
+    );
+    let _ = SINK.set(Arc::new(sink));
 }

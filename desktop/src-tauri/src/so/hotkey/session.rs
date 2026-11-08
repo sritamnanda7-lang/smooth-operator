@@ -2,7 +2,10 @@
 //! Idle / PushToTalk / FreeTalk state machine. Tests: `so/tests/hotkey_tests.rs`.
 //!
 //! Contract (from the plan's Behaviour spec):
-//! - Idle: `Hold` -> Started(PushToTalk). `DoubleTap` -> Started(FreeTalk). Everything else: nothing.
+//! - Idle: `Down` -> Armed. `Hold` -> Started(PushToTalk). `DoubleTap` -> Started(FreeTalk).
+//! - Armed (press down, not yet a talk): `Hold` -> Started(PushToTalk); `Dirty` -> Disarmed (a chord);
+//!   clean `Release` -> waiting for a 2nd tap. Waiting: `TapExpired` or `Dirty` -> Disarmed;
+//!   `DoubleTap` -> Started(FreeTalk). `reset()` while armed or waiting -> Disarmed.
 //! - PushToTalk: `Release{clean:true}` -> Stopped; `Dirty` or `Release{clean:false}` -> Cancelled (then Idle).
 //! - FreeTalk: the press that started it: `Dirty` before its release -> Cancelled(FreeTalk); its clean
 //!   release -> nothing. Later: a new press (`Down`) ends the talk on its clean `Release` -> Stopped(FreeTalk);
@@ -19,11 +22,9 @@ pub enum Mode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TalkEvent {
-    /// STEP-2 STUB: declared, never emitted yet. A clean target Down while Idle (not in free-talk).
-    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    /// A clean target Down while Idle (not in free-talk): the press may become a talk.
     Armed,
-    /// STEP-2 STUB: declared, never emitted yet. The armed press did not become a talk.
-    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    /// The armed press did not become a talk (lone tap, chord, or a 2nd tap that came too late).
     Disarmed,
     Started(Mode),
     Stopped(Mode),
@@ -44,6 +45,10 @@ enum Free {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum State {
     Idle,
+    /// A clean press is down; it may become push-to-talk, a tap, or a chord.
+    Armed,
+    /// A clean short tap was released; a 2nd tap within 400 ms makes free-talk.
+    Tapped,
     PushToTalk,
     FreeTalk(Free),
 }
@@ -68,6 +73,29 @@ impl Session {
     pub fn on(&mut self, out: DetOut) -> Option<TalkEvent> {
         use Mode::{FreeTalk, PushToTalk};
         match (self.state, out) {
+            (State::Idle, DetOut::Down) => {
+                self.state = State::Armed;
+                Some(TalkEvent::Armed)
+            }
+            (State::Armed, DetOut::Hold) => {
+                self.state = State::PushToTalk;
+                Some(TalkEvent::Started(PushToTalk))
+            }
+            (State::Armed, DetOut::Release { clean: true }) => {
+                self.state = State::Tapped;
+                None
+            }
+            (State::Armed, DetOut::Dirty)
+            | (State::Armed, DetOut::Release { clean: false })
+            | (State::Tapped, DetOut::Dirty)
+            | (State::Tapped, DetOut::TapExpired) => {
+                self.state = State::Idle;
+                Some(TalkEvent::Disarmed)
+            }
+            (State::Tapped, DetOut::DoubleTap) => {
+                self.state = State::FreeTalk(Free::Starting);
+                Some(TalkEvent::Started(FreeTalk))
+            }
             (State::Idle, DetOut::Hold) => {
                 self.state = State::PushToTalk;
                 Some(TalkEvent::Started(PushToTalk))
@@ -121,10 +149,24 @@ impl Session {
     pub fn reset(&mut self) -> Option<TalkEvent> {
         let ev = match self.state {
             State::Idle => None,
+            State::Armed | State::Tapped => Some(TalkEvent::Disarmed),
             State::PushToTalk => Some(TalkEvent::Cancelled(Mode::PushToTalk)),
             State::FreeTalk(_) => Some(TalkEvent::Cancelled(Mode::FreeTalk)),
         };
         self.state = State::Idle;
         ev
+    }
+
+    /// A timer ended the talk (`Engine::force_stop`): go Idle and say which mode was running.
+    pub fn end_talk(&mut self) -> Option<Mode> {
+        let mode = match self.state {
+            State::PushToTalk => Some(Mode::PushToTalk),
+            State::FreeTalk(_) => Some(Mode::FreeTalk),
+            _ => None,
+        };
+        if mode.is_some() {
+            self.state = State::Idle;
+        }
+        mode
     }
 }

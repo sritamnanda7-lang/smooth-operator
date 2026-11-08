@@ -15,7 +15,8 @@
 //!   Never sent when nothing is pending (e.g. Right Cmd+C after the 2nd release).
 //! - `DoubleTap`: 2nd clean press started <= 400 ms after the first tap was released (tap = < 300 ms, clean).
 //! - A press that starts with another modifier already held, or with the Left variant, gives nothing.
-//! - `needs_tick()` is true only while a press is pending the 300 ms hold timer.
+//! - `TapExpired`: a clean tap was not followed by a 2nd press within 400 ms (once, from `tick`).
+//! - `needs_tick()` is true only while a press is pending the 300 ms hold timer or a tap's window is open.
 
 use handy_keys::{Key, KeyEvent, Modifiers};
 use std::time::{Duration, Instant};
@@ -30,8 +31,7 @@ pub enum DetOut {
     Release { clean: bool },
     Dirty,
     DoubleTap,
-    /// STEP-2 STUB: declared, never emitted yet. A lone tap's 400 ms double-tap window ran out.
-    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    /// A lone tap's 400 ms double-tap window ran out (sent once, from `tick`).
     TapExpired,
 }
 
@@ -182,6 +182,14 @@ impl Detector {
 
     /// Call while `needs_tick()` so a hold is noticed while the key is still down.
     pub fn tick(&mut self, now: Instant) -> Vec<DetOut> {
+        if matches!(self.phase, Phase::Up) {
+            if let Some(tap) = self.last_tap {
+                if now.saturating_duration_since(tap) > DOUBLE_TAP_GAP {
+                    self.last_tap = None;
+                    return vec![DetOut::TapExpired];
+                }
+            }
+        }
         if let Phase::Down {
             start,
             hold_sent: false,
@@ -202,7 +210,7 @@ impl Detector {
         Vec::new()
     }
 
-    /// True only while a press waits for the 300 ms hold timer.
+    /// True while a press waits for the 300 ms hold timer, or a lone tap waits for its 400 ms window.
     pub fn needs_tick(&self) -> bool {
         matches!(
             self.phase,
@@ -212,7 +220,7 @@ impl Detector {
                 second: false,
                 ..
             }
-        )
+        ) || (matches!(self.phase, Phase::Up) && self.last_tap.is_some())
     }
 
     /// Forget a remembered tap (used after a free-talk ends so the ending tap cannot start a new double-tap).

@@ -31,8 +31,7 @@ pub enum Msg {
     SetTarget(HotkeyChoice),
     Shutdown,
     SourceFailed,
-    /// STEP-2 STUB: end talk number `seq` (see `Engine::force_stop`). Sent by the silence watch.
-    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    /// End talk number `seq` (see `Engine::force_stop`). Sent by the talk timer.
     ForceStop(u64),
 }
 
@@ -44,7 +43,7 @@ pub trait KeySource: Send + Sync {
     fn recv(&self) -> Result<KeyEvent, SourceError>;
 }
 
-/// Step 1 = PanelSink; step 2 plugs speech-to-text here.
+/// Step 1 = PanelSink; step 2 = SpeechSink (speech-to-text).
 pub trait TalkSink: Send + Sync {
     fn on_event(&self, event: TalkEvent);
 }

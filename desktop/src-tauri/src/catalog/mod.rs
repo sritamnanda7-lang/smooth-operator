@@ -33,7 +33,7 @@ const SCHEMA: u32 = 2;
 /// file URL is `{mirror}/{repo_id}/{revision}/{filename}` — the same three
 /// values that form the HF resolve URL, so a mirror is a plain static host.
 /// `scripts/mirror_models.py` populates it from this catalog.
-const MIRRORS: &[&str] = &["https://blob.handy.computer"];
+const MIRRORS: &[&str] = &[];
 
 /// Handy's list order and onboarding set, keyed by catalog id. Kept from the
 /// previous generator until onboarding moves to the package's recommendations.
@@ -570,17 +570,10 @@ mod tests {
     }
 
     #[test]
-    fn every_offered_model_has_mirror_fallbacks_with_hashes() {
-        // The mirror fallback is the safety net for HF outages and blocked
-        // networks; an offered entry without one silently loses that net.
+    fn no_mirrors_are_configured() {
+        // Smooth Operator downloads only from its own pinned Hugging Face repo (so::stt::model).
         for d in CATALOG.iter() {
-            let mirrors = mirror_fallbacks(&d.id);
-            assert!(!mirrors.is_empty(), "{}: no mirror fallbacks", d.id);
-            for m in &mirrors {
-                assert_eq!(m.sha256.len(), 64, "{}: mirror entry lacks a sha256", d.id);
-                assert!(m.size_bytes > 0, "{}: mirror entry lacks a size", d.id);
-                assert!(m.url.starts_with("https://"), "{}: bad url {}", d.id, m.url);
-            }
+            assert!(mirror_fallbacks(&d.id).is_empty(), "{}: unexpected mirror", d.id);
         }
     }
 

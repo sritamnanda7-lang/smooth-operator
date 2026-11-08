@@ -20,6 +20,7 @@ use tauri::AppHandle;
 /// when the hotkey is Fn and the read-only check finds a clash, shows one warning line for 6 s.
 pub fn setup(app: &AppHandle) {
     panel::create(app);
+    stt::setup(app);
     let hotkey = settings::load_hotkey(app, Platform::current());
     let report = fncheck::check(&*fncheck::system_env(), hotkey);
     if report.has_problem() {

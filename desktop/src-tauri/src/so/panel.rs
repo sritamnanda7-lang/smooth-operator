@@ -175,24 +175,40 @@ impl TalkSink for PanelSink {
     }
 }
 
-/// STEP-2 STUB (`todo!()` in `new`/`show`/`hide`). Talk-id-tagged panel writes: the newest talk owns
-/// the panel. `show`/`hide` from a talk id lower than the highest id seen so far are dropped.
-/// `hide` also clears the stored last payload (`set_last(None)`) when it is not dropped.
-#[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+/// Talk-id-tagged panel writes: the newest talk owns the panel. `show`/`hide` from a talk id lower
+/// than the highest id seen so far are dropped, so text from an older talk can never overwrite or
+/// hide what a newer talk shows. `hide` also clears the stored last payload (`set_last(None)`).
 pub struct TaggedPanel {
-    _panel: Arc<dyn PanelOut>,
+    panel: Arc<dyn PanelOut>,
+    /// Highest talk id seen. The lock is held while writing, so two writes cannot interleave.
+    newest: Mutex<u64>,
 }
 
-#[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
 impl TaggedPanel {
-    pub fn new(_panel: Arc<dyn PanelOut>) -> Self {
-        todo!("step 2: TaggedPanel::new")
+    pub fn new(panel: Arc<dyn PanelOut>) -> Self {
+        TaggedPanel {
+            panel,
+            newest: Mutex::new(0),
+        }
     }
-    pub fn show(&self, _talk_id: u64, _payload: PanelPayload) {
-        todo!("step 2: TaggedPanel::show")
+
+    pub fn show(&self, talk_id: u64, payload: PanelPayload) {
+        let mut newest = self.newest.lock().unwrap_or_else(|e| e.into_inner());
+        if talk_id < *newest {
+            return;
+        }
+        *newest = talk_id;
+        self.panel.show(payload);
     }
-    pub fn hide(&self, _talk_id: u64) {
-        todo!("step 2: TaggedPanel::hide")
+
+    pub fn hide(&self, talk_id: u64) {
+        let mut newest = self.newest.lock().unwrap_or_else(|e| e.into_inner());
+        if talk_id < *newest {
+            return;
+        }
+        *newest = talk_id;
+        self.panel.hide();
+        set_last(None);
     }
 }
 

@@ -27,6 +27,10 @@ use watcher::{Clock, KeySource, Msg, SourceError, TalkSink};
 pub struct Engine {
     detector: Detector,
     session: Session,
+    /// Number of talks started since launch (the Nth `Started`).
+    seq: u64,
+    /// The running talk: its number and mode.
+    talk: Option<(u64, Mode)>,
 }
 
 impl Engine {
@@ -34,6 +38,8 @@ impl Engine {
         Engine {
             detector: Detector::new(target.modifier()),
             session: Session::new(),
+            seq: 0,
+            talk: None,
         }
     }
 
@@ -41,6 +47,7 @@ impl Engine {
         let mut events = Vec::new();
         for o in outs {
             if let Some(e) = self.session.on(o) {
+                self.track(e);
                 events.push(e);
             }
         }
@@ -48,6 +55,18 @@ impl Engine {
             self.detector.forget_tap();
         }
         events
+    }
+
+    /// Keep the running talk's number and mode.
+    fn track(&mut self, e: TalkEvent) {
+        match e {
+            TalkEvent::Started(mode) => {
+                self.seq += 1;
+                self.talk = Some((self.seq, mode));
+            }
+            TalkEvent::Stopped(_) | TalkEvent::Cancelled(_) => self.talk = None,
+            TalkEvent::Armed | TalkEvent::Disarmed => {}
+        }
     }
 
     pub fn feed(&mut self, ev: &KeyEvent, now: Instant) -> Vec<TalkEvent> {
@@ -64,16 +83,25 @@ impl Engine {
         self.detector.needs_tick()
     }
 
-    /// STEP-2 STUB (`todo!()`): end the talk numbered `seq` (the Nth `Started` since launch) and
-    /// return `[Stopped(mode)]`; go Idle and `forget_tap`. A `seq` that is not the current talk, or
-    /// no talk running -> empty.
-    pub fn force_stop(&mut self, _seq: u64) -> Vec<TalkEvent> {
-        todo!("step 2: Engine::force_stop")
+    /// End the talk numbered `seq` (the Nth `Started` since launch) and return `[Stopped(mode)]`; go
+    /// Idle and `forget_tap`. A `seq` that is not the current talk (a stale message), or no talk
+    /// running -> empty. The later key release of that talk is then ignored.
+    pub fn force_stop(&mut self, seq: u64) -> Vec<TalkEvent> {
+        match self.talk {
+            Some((n, mode)) if n == seq => {
+                self.talk = None;
+                self.session.end_talk();
+                self.detector.forget_tap();
+                vec![TalkEvent::Stopped(mode)]
+            }
+            _ => Vec::new(),
+        }
     }
 
     /// New hotkey: fresh detector, session reset. Returns Cancelled if a talk was active.
     pub fn set_target(&mut self, target: HotkeyChoice) -> Option<TalkEvent> {
         self.detector = Detector::new(target.modifier());
+        self.talk = None;
         self.session.reset()
     }
 }
@@ -190,7 +218,8 @@ impl KeySource for ListenerSource {
     }
 }
 
-struct SystemClock;
+/// The real clock.
+pub struct SystemClock;
 
 impl Clock for SystemClock {
     fn now(&self) -> Instant {
@@ -208,11 +237,14 @@ pub fn start(app: &AppHandle, panel: Arc<dyn PanelOut>) {
         return;
     }
     let initial = settings::load_hotkey(app, Platform::current());
-    let app_for_sink = app.clone();
-    let sink: Arc<dyn TalkSink> = Arc::new(super::panel::PanelSink::new(
-        panel.clone(),
-        Box::new(move || settings::load_hotkey(&app_for_sink, Platform::current())),
-    ));
+    // Speech (step 2) when it is set up; the plain panel sink otherwise.
+    let sink: Arc<dyn TalkSink> = super::stt::talk_sink().unwrap_or_else(|| {
+        let app_for_sink = app.clone();
+        Arc::new(super::panel::PanelSink::new(
+            panel.clone(),
+            Box::new(move || settings::load_hotkey(&app_for_sink, Platform::current())),
+        ))
+    });
     let make = || -> Result<Box<dyn KeySource>, SourceError> {
         let blocking = Arc::new(Mutex::new(HashSet::new()));
         let listener = KeyboardListener::new_with_blocking(blocking).map_err(|_| SourceError)?;
@@ -225,6 +257,11 @@ pub fn start(app: &AppHandle, panel: Arc<dyn PanelOut>) {
 /// stored choice when it starts).
 pub fn set_target(choice: HotkeyChoice) -> bool {
     STARTER.send(Msg::SetTarget(choice))
+}
+
+/// Ask the watcher to end talk number `seq` (a talk timer ran out). False if it is not running.
+pub fn force_stop(seq: u64) -> bool {
+    STARTER.send(Msg::ForceStop(seq))
 }
 
 /// Ask the watcher to stop (the app is quitting).
