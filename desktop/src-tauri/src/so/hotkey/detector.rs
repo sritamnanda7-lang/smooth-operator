@@ -30,6 +30,9 @@ pub enum DetOut {
     Release { clean: bool },
     Dirty,
     DoubleTap,
+    /// STEP-2 STUB: declared, never emitted yet. A lone tap's 400 ms double-tap window ran out.
+    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    TapExpired,
 }
 
 /// Where the target key is, as far as we know. (A Rust `enum` is a type that is exactly one of a

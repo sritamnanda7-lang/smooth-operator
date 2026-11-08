@@ -64,6 +64,13 @@ impl Engine {
         self.detector.needs_tick()
     }
 
+    /// STEP-2 STUB (`todo!()`): end the talk numbered `seq` (the Nth `Started` since launch) and
+    /// return `[Stopped(mode)]`; go Idle and `forget_tap`. A `seq` that is not the current talk, or
+    /// no talk running -> empty.
+    pub fn force_stop(&mut self, _seq: u64) -> Vec<TalkEvent> {
+        todo!("step 2: Engine::force_stop")
+    }
+
     /// New hotkey: fresh detector, session reset. Returns Cancelled if a talk was active.
     pub fn set_target(&mut self, target: HotkeyChoice) -> Option<TalkEvent> {
         self.detector = Detector::new(target.modifier());

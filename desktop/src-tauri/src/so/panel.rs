@@ -94,6 +94,8 @@ pub enum PanelAction {
     Show(PanelPayload),
     ShowThenHide(PanelPayload, Duration),
     Hide,
+    /// Armed / Disarmed: the panel does nothing (step 2).
+    Ignore,
 }
 
 /// Fixed strings. Started(PushToTalk) -> "Listening" (Listening); Started(FreeTalk) ->
@@ -120,6 +122,7 @@ pub fn action_for(event: TalkEvent, hotkey: HotkeyChoice) -> PanelAction {
             PanelAction::ShowThenHide(one("Stopped".into(), Kind::Info), HIDE_AFTER_STOP)
         }
         TalkEvent::Cancelled(_) => PanelAction::Hide,
+        TalkEvent::Armed | TalkEvent::Disarmed => PanelAction::Ignore,
     }
 }
 
@@ -149,10 +152,14 @@ impl PanelSink {
 
 impl TalkSink for PanelSink {
     fn on_event(&self, event: TalkEvent) {
+        if matches!(event, TalkEvent::Armed | TalkEvent::Disarmed) {
+            return; // never touches the panel or the hide timer
+        }
         let gen = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         match action_for(event, (self.hotkey)()) {
             PanelAction::Show(p) => self.panel.show(p),
             PanelAction::Hide => self.panel.hide(),
+            PanelAction::Ignore => {}
             PanelAction::ShowThenHide(p, after) => {
                 self.panel.show(p);
                 let panel = self.panel.clone();
@@ -165,6 +172,27 @@ impl TalkSink for PanelSink {
                 });
             }
         }
+    }
+}
+
+/// STEP-2 STUB (`todo!()` in `new`/`show`/`hide`). Talk-id-tagged panel writes: the newest talk owns
+/// the panel. `show`/`hide` from a talk id lower than the highest id seen so far are dropped.
+/// `hide` also clears the stored last payload (`set_last(None)`) when it is not dropped.
+#[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+pub struct TaggedPanel {
+    _panel: Arc<dyn PanelOut>,
+}
+
+#[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+impl TaggedPanel {
+    pub fn new(_panel: Arc<dyn PanelOut>) -> Self {
+        todo!("step 2: TaggedPanel::new")
+    }
+    pub fn show(&self, _talk_id: u64, _payload: PanelPayload) {
+        todo!("step 2: TaggedPanel::show")
+    }
+    pub fn hide(&self, _talk_id: u64) {
+        todo!("step 2: TaggedPanel::hide")
     }
 }
 
@@ -198,11 +226,11 @@ tauri_panel! {
 /// was ready (for example a start-up warning) is not lost.
 static LAST: Mutex<Option<PanelPayload>> = Mutex::new(None);
 
-fn last_payload() -> Option<PanelPayload> {
+pub fn last_payload() -> Option<PanelPayload> {
     LAST.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
-fn set_last(payload: Option<PanelPayload>) {
+pub fn set_last(payload: Option<PanelPayload>) {
     *LAST.lock().unwrap_or_else(|e| e.into_inner()) = payload;
 }
 

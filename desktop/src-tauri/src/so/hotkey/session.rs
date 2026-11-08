@@ -19,6 +19,12 @@ pub enum Mode {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TalkEvent {
+    /// STEP-2 STUB: declared, never emitted yet. A clean target Down while Idle (not in free-talk).
+    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    Armed,
+    /// STEP-2 STUB: declared, never emitted yet. The armed press did not become a talk.
+    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    Disarmed,
     Started(Mode),
     Stopped(Mode),
     Cancelled(Mode),

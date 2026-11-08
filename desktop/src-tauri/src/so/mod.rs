@@ -8,6 +8,7 @@ pub mod fncheck;
 pub mod hotkey;
 pub mod panel;
 pub mod settings;
+pub mod stt;
 pub mod webview;
 
 use panel::{Kind, Line, PanelPayload};
@@ -31,6 +32,6 @@ pub fn setup(app: &AppHandle) {
     }
 }
 
-// Step 1 tests (written first; the stubs above make them compile and fail).
+// Tests (step 1, step 2): written first; stubs make them compile and fail.
 #[cfg(test)]
 mod tests;

@@ -19,15 +19,36 @@ fn keyev(flags: Modifiers, key: Key, down: bool) -> KeyEvent {
     KeyEvent { modifiers: flags, key: Some(key), is_key_down: down, changed_modifier: None }
 }
 
+/// Step 2 added `Armed`/`Disarmed` events. The step-1 tests are about talks only, so this wrapper
+/// drops those two; step-2 tests for them are in `stt_tests.rs`. (`needs_tick` passes through.)
+struct Core(Engine);
+fn talk_only(v: Vec<TalkEvent>) -> Vec<TalkEvent> {
+    v.into_iter().filter(|e| !matches!(e, TalkEvent::Armed | TalkEvent::Disarmed)).collect()
+}
+impl Core {
+    fn feed(&mut self, ev: &KeyEvent, now: Instant) -> Vec<TalkEvent> {
+        talk_only(self.0.feed(ev, now))
+    }
+    fn tick(&mut self, now: Instant) -> Vec<TalkEvent> {
+        talk_only(self.0.tick(now))
+    }
+    fn needs_tick(&self) -> bool {
+        self.0.needs_tick()
+    }
+    fn set_target(&mut self, t: HotkeyChoice) -> Option<TalkEvent> {
+        talk_only(self.0.set_target(t).into_iter().collect()).into_iter().next()
+    }
+}
+
 /// Engine + a base instant, so tests read in milliseconds.
 struct Rig {
-    e: Engine,
+    e: Core,
     t0: Instant,
     target: Modifiers,
 }
 impl Rig {
     fn new(choice: HotkeyChoice) -> Self {
-        Rig { e: Engine::new(choice), t0: Instant::now(), target: choice.modifier() }
+        Rig { e: Core(Engine::new(choice)), t0: Instant::now(), target: choice.modifier() }
     }
     fn at(&self, ms: u64) -> Instant {
         self.t0 + Duration::from_millis(ms)

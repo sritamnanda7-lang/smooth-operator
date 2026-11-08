@@ -31,6 +31,9 @@ pub enum Msg {
     SetTarget(HotkeyChoice),
     Shutdown,
     SourceFailed,
+    /// STEP-2 STUB: end talk number `seq` (see `Engine::force_stop`). Sent by the silence watch.
+    #[cfg_attr(not(test), expect(dead_code))] // step-2 stub: remove when wired
+    ForceStop(u64),
 }
 
 #[derive(Debug)]
@@ -85,6 +88,7 @@ pub fn run(
                 // The key source is gone: nothing more can arrive. Returning lets `start` retry.
                 return;
             }
+            Some(Msg::ForceStop(seq)) => engine.force_stop(seq),
             Some(Msg::Shutdown) => return,
             None => engine.tick(clock.now()),
         };
