@@ -282,3 +282,40 @@ fn step2_files_exist() {
         assert!(p(&format!("desktop/src-tauri/src/so/tests/{f}.rs")).exists(), "missing so/tests/{f}.rs");
     }
 }
+
+// ---- gate 9: scripts/fork-size.sh never counts our so/ dirs, still counts real Handy files ----
+#[test]
+fn fork_size_skips_so_dirs_but_counts_handy_files() {
+    use std::process::Command;
+    let tmp = std::env::temp_dir().join(format!("fork-size-selftest-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&tmp);
+    let w = |rel: &str, body: &str| {
+        let f = tmp.join(rel);
+        fs::create_dir_all(f.parent().unwrap()).unwrap();
+        fs::write(f, body).unwrap();
+    };
+    let git = |args: &[&str]| {
+        let o = Command::new("git").args(args).current_dir(&tmp).output().unwrap();
+        assert!(o.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&o.stderr));
+    };
+    fs::create_dir_all(tmp.join("scripts")).unwrap();
+    fs::copy(p("scripts/fork-size.sh"), tmp.join("scripts/fork-size.sh")).unwrap();
+    fs::write(tmp.join("scripts/fork-size-exclude.txt"), "# none\n").unwrap();
+    for f in ["desktop/src-tauri/src/so/ours.rs", "desktop/src/so/ours.ts", "desktop/src-tauri/src/handy.rs"] {
+        w(f, "a\n");
+    }
+    git(&["init", "-q"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "add", "-A"]);
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base"]);
+    git(&["tag", "base"]);
+    for f in ["desktop/src-tauri/src/so/ours.rs", "desktop/src/so/ours.ts", "desktop/src-tauri/src/handy.rs"] {
+        w(f, "a\nb\nc\n");
+    }
+    git(&["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "head"]);
+    let o = Command::new("bash").args(["scripts/fork-size.sh", "--base", "base"]).current_dir(&tmp).output().unwrap();
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    let _ = fs::remove_dir_all(&tmp);
+    assert!(out.contains("files modified: 1 "), "{out}");
+    assert!(out.contains("src-tauri/src/handy.rs"), "{out}");
+    assert!(!out.contains("/so/"), "so/ file was counted: {out}");
+}

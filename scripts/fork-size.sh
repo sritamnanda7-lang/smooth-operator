@@ -40,6 +40,9 @@ excluded=$(grep -v '^[[:space:]]*#' "$EXCL" 2>/dev/null | sed '/^[[:space:]]*$/d
 while IFS=$'\t' read -r path add del; do
   [ -n "$path" ] || continue
   grep -qxF -- "$path" "$basefiles" || continue
+  # Founder decision 2026-11-08: our own code is never "Handy core" (plan of record: it lives in new
+  # directories and is not counted). Skip so/ dirs here, in logic, not in the frozen exclude list.
+  case "$path" in desktop/src-tauri/src/so/*|desktop/src/so/*) continue ;; esac
   if [ -n "$excluded" ] && printf '%s\n' "$excluded" | grep -qxF -- "$path"; then continue; fi
   files=$((files + 1)); added=$((added + add)); deleted=$((deleted + del))
   printf '  %5s +  %5s -  %s\n' "$add" "$del" "$path"
