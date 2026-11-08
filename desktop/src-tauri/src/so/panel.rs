@@ -223,6 +223,18 @@ fn place(app: &AppHandle, win: &WebviewWindow) {
     }
 }
 
+/// Show `payload`, then hide it after `after`, unless something else was shown in the meantime.
+pub fn show_timed(panel: &Arc<dyn PanelOut>, payload: PanelPayload, after: Duration) {
+    panel.show(payload.clone());
+    let panel = panel.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(after);
+        if last_payload().as_ref() == Some(&payload) {
+            panel.hide();
+        }
+    });
+}
+
 /// Builds the hidden panel window and registers `PanelHandle` as app state.
 pub fn create(app: &AppHandle) {
     let url = WebviewUrl::App(PAGE_PATH.trim_start_matches('/').into());

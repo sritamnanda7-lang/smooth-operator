@@ -68,6 +68,7 @@
     "allow-run-keyboard-diagnostic",
     "allow-so-get-hotkey",
     "allow-so-set-hotkey",
-    "allow-so-hotkey-options"
+    "allow-so-hotkey-options",
+    "allow-so-fn-check"
   ]
 }

@@ -381,7 +381,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     autostart::apply_autostart(app_handle, false);
 
     // Create our floating panel (hidden by default). It replaces Handy's recording overlay.
-    so::panel::create(app_handle);
+    so::setup(app_handle);
 }
 
 #[tauri::command]
@@ -526,6 +526,7 @@ pub fn run(cli_args: CliArgs) {
             so::commands::so_get_hotkey,
             so::commands::so_set_hotkey,
             so::commands::so_hotkey_options,
+            so::commands::so_fn_check,
         ])
         .events(collect_events![
             managers::transcription::StreamTextEvent,

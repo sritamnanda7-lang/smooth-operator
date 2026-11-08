@@ -2,6 +2,7 @@
 //! Our IPC commands. Every one is allow-listed for the main window only (capabilities/default.json).
 //! (A Tauri "command" is a Rust function the settings page may call by name.)
 
+use super::fncheck::{self, FnCheckReport};
 use super::hotkey;
 use super::settings::{self, HotkeyChoice, Platform};
 use tauri::AppHandle;
@@ -29,4 +30,13 @@ pub fn so_set_hotkey(app: AppHandle, choice: String) -> Result<(), String> {
 #[specta::specta]
 pub fn so_hotkey_options() -> Vec<HotkeyChoice> {
     HotkeyChoice::options_for(Platform::current())
+}
+
+/// Read-only Fn clash check (macOS Globe setting, Dictation shortcut, known voice apps). Never
+/// changes a system setting.
+#[tauri::command]
+#[specta::specta]
+pub fn so_fn_check(app: AppHandle) -> FnCheckReport {
+    let hotkey = settings::load_hotkey(&app, Platform::current());
+    fncheck::check(&*fncheck::system_env(), hotkey)
 }

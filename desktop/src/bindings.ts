@@ -837,6 +837,13 @@ async soSetHotkey(choice: string) : Promise<Result<null, string>> {
  */
 async soHotkeyOptions() : Promise<HotkeyChoice[]> {
     return await TAURI_INVOKE("so_hotkey_options");
+},
+/**
+ * Read-only Fn clash check (macOS Globe setting, Dictation shortcut, known voice apps). Never
+ * changes a system setting.
+ */
+async soFnCheck() : Promise<FnCheckReport> {
+    return await TAURI_INVOKE("so_fn_check");
 }
 }
 
@@ -977,6 +984,17 @@ export type ChineseScript =
 "traditional_hk"
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
+export type Dictation = "Ok" | "Warn" | "Unknown"
+export type FnCheckReport = { applies: boolean; globe: Globe; dictation: Dictation; 
+/**
+ * Names (not bundle IDs) of running known apps. Only matches are returned.
+ */
+apps: string[] }
+/**
+ * Globe key setting. 0 = Do Nothing = Ok. 1, 2, 3 and missing = Warn(label, non-empty).
+ * Any other number (not a known mode) = Unknown.
+ */
+export type Globe = "Ok" | { Warn: string } | "Unknown"
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
 /**
  * The talk key. Serde names (stored in `so_settings.json`, sent over IPC): "fn", "right_cmd", "right_ctrl".
