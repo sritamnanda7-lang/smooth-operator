@@ -65,6 +65,9 @@
     "allow-open-app-data-dir",
     "allow-get-log-dir-path",
     "allow-open-log-dir",
-    "allow-run-keyboard-diagnostic"
+    "allow-run-keyboard-diagnostic",
+    "allow-so-get-hotkey",
+    "allow-so-set-hotkey",
+    "allow-so-hotkey-options"
   ]
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
-//! Forwarder thread + merged channel + watcher loop. STUB. Tests: `so/tests/watcher_tests.rs` (T16, T27, T31, T32).
+//! Forwarder thread + merged channel + watcher loop. Tests: `so/tests/watcher_tests.rs` (T16, T27, T31, T32).
 //!
 //! Contract:
 //! - `run` blocks on `rx.recv()` while the engine does not need a tick (Idle / free-talk) and reads the
@@ -11,14 +11,18 @@
 //! - `spawn_forwarder`: loops `source.recv()`; Ok -> send `Msg::Key`; Err -> send `Msg::SourceFailed` and exit;
 //!   if the send fails (channel closed) it exits.
 
-use super::super::panel::PanelOut;
+use super::super::panel::{Kind, Line, PanelOut, PanelPayload};
 use super::super::settings::HotkeyChoice;
 use super::session::TalkEvent;
+use super::Engine;
 use handy_keys::KeyEvent;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::JoinHandle;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// How often the loop wakes while a press waits for the 300 ms hold timer.
+const TICK: Duration = Duration::from_millis(20);
 
 pub const SOURCE_FAILED_TEXT: &str = "Key watcher stopped: check Accessibility/Input Monitoring";
 
@@ -47,16 +51,62 @@ pub trait Clock: Send + Sync {
     fn now(&self) -> Instant;
 }
 
+/// The watcher loop. Blocks on `recv()` while no press waits for the hold timer; uses a 20 ms
+/// timeout only while one does. So an idle app does not wake up at all.
 pub fn run(
-    _rx: Receiver<Msg>,
-    _initial: HotkeyChoice,
-    _sink: Arc<dyn TalkSink>,
-    _panel: Arc<dyn PanelOut>,
-    _clock: Arc<dyn Clock>,
+    rx: Receiver<Msg>,
+    initial: HotkeyChoice,
+    sink: Arc<dyn TalkSink>,
+    panel: Arc<dyn PanelOut>,
+    clock: Arc<dyn Clock>,
 ) {
-    todo!("step 1: watcher loop")
+    let mut engine = Engine::new(initial);
+    loop {
+        let msg = if engine.needs_tick() {
+            match rx.recv_timeout(TICK) {
+                Ok(m) => Some(m),
+                Err(RecvTimeoutError::Timeout) => None,
+                Err(RecvTimeoutError::Disconnected) => return,
+            }
+        } else {
+            match rx.recv() {
+                Ok(m) => Some(m),
+                Err(_) => return,
+            }
+        };
+        let events = match msg {
+            Some(Msg::Key(ev)) => engine.feed(&ev, clock.now()),
+            Some(Msg::SetTarget(choice)) => engine.set_target(choice).into_iter().collect(),
+            Some(Msg::SourceFailed) => {
+                panel.show(PanelPayload::new(vec![Line::new(SOURCE_FAILED_TEXT, Kind::Warn)]));
+                Vec::new()
+            }
+            Some(Msg::Shutdown) => return,
+            None => engine.tick(clock.now()),
+        };
+        for e in events {
+            sink.on_event(e);
+        }
+    }
 }
 
-pub fn spawn_forwarder(_source: Box<dyn KeySource>, _tx: Sender<Msg>) -> JoinHandle<()> {
-    todo!("step 1: forwarder thread")
+/// Reads the key source on its own thread and pushes each event into the channel. It exits when
+/// the source fails (after sending `SourceFailed`) or when the channel is closed (the next send fails).
+pub fn spawn_forwarder(source: Box<dyn KeySource>, tx: Sender<Msg>) -> JoinHandle<()> {
+    std::thread::Builder::new()
+        .name("so-key-forwarder".into())
+        .spawn(move || loop {
+            match source.recv() {
+                Ok(ev) => {
+                    if tx.send(Msg::Key(ev)).is_err() {
+                        return;
+                    }
+                }
+                Err(_) => {
+                    let _ = tx.send(Msg::SourceFailed);
+                    return;
+                }
+            }
+        })
+        .expect("spawn key forwarder thread")
 }

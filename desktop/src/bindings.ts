@@ -814,6 +814,29 @@ async dismissNotice(source: NoticeSource, code: NoticeCode) : Promise<void> {
  */
 async dismissOverlayNotice() : Promise<void> {
     await TAURI_INVOKE("dismiss_overlay_notice");
+},
+/**
+ * The saved hotkey (or the OS default).
+ */
+async soGetHotkey() : Promise<HotkeyChoice> {
+    return await TAURI_INVOKE("so_get_hotkey");
+},
+/**
+ * Save a new hotkey, then tell the running watcher. A value this OS does not offer is an error.
+ */
+async soSetHotkey(choice: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("so_set_hotkey", { choice }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The hotkeys this OS offers, default first.
+ */
+async soHotkeyOptions() : Promise<HotkeyChoice[]> {
+    return await TAURI_INVOKE("so_hotkey_options");
 }
 }
 
@@ -955,6 +978,10 @@ export type ChineseScript =
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type GpuDeviceOption = { id: string; name: string; total_vram_mb: number }
+/**
+ * The talk key. Serde names (stored in `so_settings.json`, sent over IPC): "fn", "right_cmd", "right_ctrl".
+ */
+export type HotkeyChoice = "fn" | "right_cmd" | "right_ctrl"
 /**
  * Result of changing keyboard implementation
  */

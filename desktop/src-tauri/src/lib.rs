@@ -523,6 +523,9 @@ pub fn run(cli_args: CliArgs) {
             notices::get_active_notices,
             notices::dismiss_notice,
             notices::dismiss_overlay_notice,
+            so::commands::so_get_hotkey,
+            so::commands::so_set_hotkey,
+            so::commands::so_hotkey_options,
         ])
         .events(collect_events![
             managers::transcription::StreamTextEvent,

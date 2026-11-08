@@ -3,6 +3,7 @@
 //! Handy files stay thin (gate 9: at most 15 Handy files modified).
 
 pub mod actions;
+pub mod commands;
 pub mod fncheck;
 pub mod hotkey;
 pub mod panel;

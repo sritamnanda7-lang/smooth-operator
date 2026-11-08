@@ -113,7 +113,6 @@ const APP_COMMANDS: CommandNames = &[
     "so_get_hotkey",
     "so_set_hotkey",
     "so_hotkey_options",
-    "so_fn_check",
 ];
 
 fn main() {
