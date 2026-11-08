@@ -24,7 +24,7 @@ use super::silence::{End, SilenceWatch};
 use super::{HEARD_SECS, MIC_OPEN_AT, MicOpenAt};
 use crate::so::hotkey::session::{Mode, TalkEvent};
 use crate::so::hotkey::watcher::{Clock, TalkSink};
-use crate::so::rules::{PassThrough, TranscriptRouter};
+use crate::so::rules::{metrics as rules_metrics, PassThrough, Route, TranscriptRouter};
 use crate::so::panel::{self, Kind, Line, PanelAction, PanelOut, PanelPayload, TaggedPanel};
 use crate::so::settings::HotkeyChoice;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -122,12 +122,42 @@ enum Mic {
 
 pub struct SpeechSink {
     tx: Sender<Job>,
-    /// Number of the newest talk: +1 at every `Started`. Armed/Disarmed never change it.
-    talk: AtomicU64,
+    /// Number of the newest talk: +1 at every `Started`. Armed/Disarmed never change it. Shared with
+    /// `Delivery` (an `Arc` is a shared pointer: both sides see the same counter).
+    talk: Arc<AtomicU64>,
     clock: Arc<dyn Clock>,
-    /// Step 3: gets each non-blank transcript (stub: not called yet).
-    #[allow(dead_code)]
+    /// Only the typed-phrase input (debug builds) needs it.
+    #[cfg(debug_assertions)]
+    delivery: Arc<Delivery>,
+}
+
+/// Where a non-blank transcript goes (the seam): stale check, router, panel lines. One value is shared
+/// by the speech worker and (debug builds) the typed-phrase input, so both take the same path.
+struct Delivery {
+    talk: Arc<AtomicU64>,
+    clock: Arc<dyn Clock>,
     router: Arc<dyn TranscriptRouter>,
+    panel: Arc<TaggedPanel>,
+}
+
+impl Delivery {
+    /// 1. A newer talk started since this one: drop the text (no routing, no panel write), outcome 7.
+    ///    You must never get an action you cannot see on the panel.
+    /// 2. Otherwise `router.route`; the panel shows "Heard: ..." plus the router's lines, then hides
+    ///    after `HEARD_SECS`.
+    fn deliver(&self, talk: u64, text: &str, stopped_at: Instant) {
+        if self.talk.load(Ordering::SeqCst) > talk {
+            let ms = self.clock.now().saturating_duration_since(stopped_at).as_millis() as u64;
+            rules_metrics::fast_rule(7, ms);
+            return;
+        }
+        let mut lines = vec![Line::new(heard_line(text), Kind::Info)];
+        if let Route::Handled(extra) = self.router.route(text, stopped_at) {
+            lines.extend(extra);
+        }
+        self.panel.show(talk, PanelPayload::new(lines));
+        schedule_hide(&self.panel, talk);
+    }
 }
 
 impl SpeechSink {
@@ -159,10 +189,19 @@ impl SpeechSink {
         router: Arc<dyn TranscriptRouter>,
     ) -> Self {
         let (tx, rx) = channel();
+        let talk = Arc::new(AtomicU64::new(0));
+        let panel = Arc::new(TaggedPanel::new(panel));
+        let delivery = Arc::new(Delivery {
+            talk: talk.clone(),
+            clock: clock.clone(),
+            router,
+            panel: panel.clone(),
+        });
         let worker = Worker {
             rec: recorder,
             tr: transcriber,
-            panel: Arc::new(TaggedPanel::new(panel)),
+            panel,
+            delivery: delivery.clone(),
             clock: clock.clone(),
             tap,
             stopper,
@@ -178,21 +217,25 @@ impl SpeechSink {
         let _ = std::thread::Builder::new()
             .name("so-speech".into())
             .spawn(move || worker.run());
-        SpeechSink { tx, talk: AtomicU64::new(0), clock, router }
+        SpeechSink {
+            tx,
+            talk,
+            clock,
+            #[cfg(debug_assertions)]
+            delivery,
+        }
     }
 
     /// Debug builds only: a typed phrase enters as a new talk (talk id +1, `stopped_at` = now), then
-    /// `deliver`. STUB.
+    /// `deliver`, on its own thread so the caller returns at once. No "Listening" cue.
     #[cfg(debug_assertions)]
-    #[allow(dead_code)]
-    pub fn inject_transcript(&self, _text: String) {
-        todo!("step 3 increment 2")
-    }
-
-    /// After a non-blank transcript: stale check, then `router.route`, then panel lines. STUB.
-    #[allow(dead_code)]
-    fn deliver(&self, _talk: u64, _text: &str, _stopped_at: Instant) {
-        todo!("step 3 increment 1")
+    pub fn inject_transcript(&self, text: String) {
+        let talk = self.talk.fetch_add(1, Ordering::SeqCst) + 1;
+        let stopped_at = self.clock.now();
+        let delivery = self.delivery.clone();
+        let _ = std::thread::Builder::new()
+            .name("so-inject".into())
+            .spawn(move || delivery.deliver(talk, &text, stopped_at));
     }
 }
 
@@ -210,6 +253,7 @@ struct Worker {
     rec: Arc<dyn Recorder>,
     tr: Arc<dyn Transcriber>,
     panel: Arc<TaggedPanel>,
+    delivery: Arc<Delivery>,
     clock: Arc<dyn Clock>,
     tap: Arc<dyn SpeechTap>,
     stopper: Arc<dyn Stopper>,
@@ -264,7 +308,7 @@ impl Worker {
             TalkEvent::Armed => self.armed(),
             TalkEvent::Disarmed => self.drop_mic(),
             TalkEvent::Started(mode) => self.started(mode, talk, at),
-            TalkEvent::Stopped(_) => self.stopped(talk),
+            TalkEvent::Stopped(_) => self.stopped(talk, at),
             TalkEvent::Cancelled(_) => {
                 self.stop_timer();
                 self.drop_mic();
@@ -378,7 +422,7 @@ impl Worker {
         });
     }
 
-    fn stopped(&mut self, talk: u64) {
+    fn stopped(&mut self, talk: u64, stopped_at: Instant) {
         self.stop_timer();
         let state = self.tr.downloaded();
         if self.blocked || self.mic != Mic::Open {
@@ -396,19 +440,26 @@ impl Worker {
             return;
         };
         self.panel.show(talk, one_line(TRANSCRIBING_TEXT, Kind::Info));
-        let (tr, panel) = (self.tr.clone(), self.panel.clone());
+        let (tr, panel, delivery) = (self.tr.clone(), self.panel.clone(), self.delivery.clone());
         let spawned = std::thread::Builder::new().name("so-transcribe".into()).spawn(move || {
             let started = Instant::now();
             let result = tr.transcribe(samples);
             let ms = started.elapsed().as_millis() as u64;
-            let (payload, chars, ok) = match result {
-                Ok(text) if text.trim().is_empty() => (one_line(DIDNT_CATCH_TEXT, Kind::Info), 0, true),
-                Ok(text) => (one_line(&heard_line(&text), Kind::Info), text.chars().count(), true),
-                Err(_) => (one_line(SPEECH_FAILED_TEXT, Kind::Warn), 0, false),
-            };
-            metrics::transcribed(ms, chars, Self::model_code(state), ok);
-            panel.show(talk, payload);
-            schedule_hide(&panel, talk);
+            let blank = matches!(&result, Ok(t) if t.trim().is_empty());
+            let chars = result.as_ref().map_or(0, |t| t.chars().count());
+            metrics::transcribed(ms, if blank { 0 } else { chars }, Self::model_code(state), result.is_ok());
+            match result {
+                // Non-blank text goes through the seam: stale check, router, "Heard: ..." panel.
+                Ok(text) if !blank => delivery.deliver(talk, &text, stopped_at),
+                other => {
+                    let payload = match other {
+                        Ok(_) => one_line(DIDNT_CATCH_TEXT, Kind::Info),
+                        Err(_) => one_line(SPEECH_FAILED_TEXT, Kind::Warn),
+                    };
+                    panel.show(talk, payload);
+                    schedule_hide(&panel, talk);
+                }
+            }
         });
         if spawned.is_err() {
             self.panel.show(talk, one_line(SPEECH_FAILED_TEXT, Kind::Warn));
