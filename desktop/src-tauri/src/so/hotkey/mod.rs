@@ -14,6 +14,7 @@ use handy_keys::{KeyEvent, KeyboardListener};
 use once_cell::sync::Lazy;
 use session::{Mode, Session, TalkEvent};
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -71,8 +72,9 @@ impl Engine {
 }
 
 /// Remembers whether `start` already succeeded (idempotent start) and holds the channel sender.
+/// A watcher that has ended (key source failed) no longer counts as started, so `start` can retry.
 pub struct Starter {
-    tx: Mutex<Option<Sender<Msg>>>,
+    running: Mutex<Option<(Sender<Msg>, Arc<AtomicBool>)>>,
 }
 
 impl Default for Starter {
@@ -84,25 +86,27 @@ impl Default for Starter {
 impl Starter {
     pub fn new() -> Self {
         Starter {
-            tx: Mutex::new(None),
+            running: Mutex::new(None),
         }
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Option<Sender<Msg>>> {
+    fn lock(&self) -> std::sync::MutexGuard<'_, Option<(Sender<Msg>, Arc<AtomicBool>)>> {
         // A poisoned lock (another thread panicked) still holds valid data here.
-        self.tx.lock().unwrap_or_else(|e| e.into_inner())
+        self.running.lock().unwrap_or_else(|e| e.into_inner())
     }
 
-    /// True only after a successful `start_with`.
+    /// True only after a successful `start_with`, and while the watcher is still running.
     pub fn is_started(&self) -> bool {
-        self.lock().is_some()
+        self.lock()
+            .as_ref()
+            .is_some_and(|(_, alive)| alive.load(Ordering::SeqCst))
     }
 
-    /// Push a message into the watcher channel. False if not started.
+    /// Push a message into the watcher channel. False if not started (or the watcher ended).
     pub fn send(&self, msg: Msg) -> bool {
         match self.lock().as_ref() {
-            Some(tx) => tx.send(msg).is_ok(),
-            None => false,
+            Some((tx, alive)) if alive.load(Ordering::SeqCst) => tx.send(msg).is_ok(),
+            _ => false,
         }
     }
 }
@@ -123,7 +127,10 @@ pub fn start_with(
 ) -> Result<(), SourceError> {
     // The lock is held while the source is made, so two callers cannot both start.
     let mut guard = starter.lock();
-    if guard.is_some() {
+    if guard
+        .as_ref()
+        .is_some_and(|(_, alive)| alive.load(Ordering::SeqCst))
+    {
         return Ok(());
     }
     let source = match make_source() {
@@ -136,20 +143,29 @@ pub fn start_with(
             return Err(e);
         }
     };
-    let (tx, rx) = channel();
-    watcher::spawn_forwarder(source, tx.clone());
-    let panel_for_run = panel.clone();
-    let spawned = std::thread::Builder::new()
-        .name("so-hotkey-watcher".into())
-        .spawn(move || watcher::run(rx, initial, sink, panel_for_run, clock));
-    if spawned.is_err() {
+    let fail = |panel: &Arc<dyn PanelOut>| {
         panel.show(PanelPayload::new(vec![Line::new(
             START_FAILED_TEXT,
             Kind::Warn,
         )]));
-        return Err(SourceError);
+        SourceError
+    };
+    let (tx, rx) = channel();
+    if watcher::try_spawn_forwarder(source, tx.clone()).is_err() {
+        return Err(fail(&panel));
     }
-    *guard = Some(tx);
+    let alive = Arc::new(AtomicBool::new(true));
+    let (alive_for_run, panel_for_run) = (alive.clone(), panel.clone());
+    let spawned = std::thread::Builder::new()
+        .name("so-hotkey-watcher".into())
+        .spawn(move || {
+            watcher::run(rx, initial, sink, panel_for_run, clock);
+            alive_for_run.store(false, Ordering::SeqCst);
+        });
+    if spawned.is_err() {
+        return Err(fail(&panel));
+    }
+    *guard = Some((tx, alive));
     Ok(())
 }
 

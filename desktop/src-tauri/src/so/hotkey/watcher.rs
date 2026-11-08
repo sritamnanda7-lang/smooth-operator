@@ -6,7 +6,7 @@
 //!   clock ONLY when a message arrives or after a `recv_timeout(20 ms)` while a press is pending.
 //!   (Tests prove "no timeout while Idle" by counting `Clock::now` calls.)
 //! - `Msg::SetTarget` -> `Engine::set_target`; a resulting `Cancelled` goes to the sink at once.
-//! - `Msg::SourceFailed` -> `panel.show` with one Warn line `SOURCE_FAILED_TEXT`; no panic; loop keeps going.
+//! - `Msg::SourceFailed` -> `panel.show` with one Warn line `SOURCE_FAILED_TEXT`; no panic; `run` returns (the Starter then allows a retry).
 //! - `Msg::Shutdown` (or a closed channel) -> `run` returns.
 //! - `spawn_forwarder`: loops `source.recv()`; Ok -> send `Msg::Key`; Err -> send `Msg::SourceFailed` and exit;
 //!   if the send fails (channel closed) it exits.
@@ -82,7 +82,8 @@ pub fn run(
                     SOURCE_FAILED_TEXT,
                     Kind::Warn,
                 )]));
-                Vec::new()
+                // The key source is gone: nothing more can arrive. Returning lets `start` retry.
+                return;
             }
             Some(Msg::Shutdown) => return,
             None => engine.tick(clock.now()),
@@ -95,7 +96,11 @@ pub fn run(
 
 /// Reads the key source on its own thread and pushes each event into the channel. It exits when
 /// the source fails (after sending `SourceFailed`) or when the channel is closed (the next send fails).
-pub fn spawn_forwarder(source: Box<dyn KeySource>, tx: Sender<Msg>) -> JoinHandle<()> {
+/// Returns an error if the OS cannot start a thread.
+pub fn try_spawn_forwarder(
+    source: Box<dyn KeySource>,
+    tx: Sender<Msg>,
+) -> std::io::Result<JoinHandle<()>> {
     std::thread::Builder::new()
         .name("so-key-forwarder".into())
         .spawn(move || loop {
@@ -111,5 +116,10 @@ pub fn spawn_forwarder(source: Box<dyn KeySource>, tx: Sender<Msg>) -> JoinHandl
                 }
             }
         })
-        .expect("spawn key forwarder thread")
+}
+
+/// Same, for tests (a thread that cannot start is a test failure).
+#[cfg(test)]
+pub fn spawn_forwarder(source: Box<dyn KeySource>, tx: Sender<Msg>) -> JoinHandle<()> {
+    try_spawn_forwarder(source, tx).expect("spawn key forwarder thread")
 }

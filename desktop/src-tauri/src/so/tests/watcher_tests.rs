@@ -316,3 +316,40 @@ fn t16_start_failure_shows_error_and_a_retry_works() {
     assert!(starter.send(Msg::SetTarget(HotkeyChoice::RightCmd)));
     assert!(starter.send(Msg::Shutdown));
 }
+
+#[test]
+fn t16c_start_can_retry_after_the_key_source_failed() {
+    let starter = Starter::new();
+    let panel = Arc::new(FakePanel::default());
+    let sink = Arc::new(FakeSink::default());
+    let clock = FakeClock::new();
+    // First source fails on its first read.
+    let (src_tx, src_rx) = channel::<Result<KeyEvent, ()>>();
+    let src_rx = Arc::new(Mutex::new(Some(src_rx)));
+    let first = move || -> Result<Box<dyn KeySource>, SourceError> {
+        let rx = src_rx.lock().unwrap().take().expect("made once");
+        Ok(Box::new(ChanSource(Mutex::new(rx))))
+    };
+    assert!(start_with(&starter, HotkeyChoice::Fn, &first, sink.clone(), panel.clone(), clock.clone()).is_ok());
+    assert!(starter.is_started());
+    drop(src_tx); // source fails
+    let start = Instant::now();
+    while starter.is_started() && start.elapsed() < Duration::from_secs(1) {
+        thread::sleep(Duration::from_millis(5));
+    }
+    assert!(!starter.is_started(), "an ended watcher must not count as started");
+    assert!(!starter.send(Msg::Shutdown));
+    // Retry builds a new source and works.
+    let calls = Arc::new(AtomicUsize::new(0));
+    let c2 = calls.clone();
+    let (_keep, rx2) = channel::<Result<KeyEvent, ()>>();
+    let rx2 = Arc::new(Mutex::new(Some(rx2)));
+    let second = move || -> Result<Box<dyn KeySource>, SourceError> {
+        c2.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(ChanSource(Mutex::new(rx2.lock().unwrap().take().unwrap()))))
+    };
+    assert!(start_with(&starter, HotkeyChoice::Fn, &second, sink, panel, clock).is_ok());
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert!(starter.is_started());
+    assert!(starter.send(Msg::Shutdown));
+}
