@@ -1,36 +1,49 @@
 // SPDX-License-Identifier: MIT
 // Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
-// Handy's dictation flow (record, transcribe, paste) is stripped. Its paste,
-// audio-feedback and language code stays for steps 3, 4 and 6 but nothing calls
-// it yet, so dead-code warnings are silenced until step 3 wires it back in.
-#![allow(dead_code)]
 
+// Handy's dictation flow is stripped; its paste, audio-feedback, language and model code stays for
+// later steps, so these Handy modules still hold code nothing calls yet. Allowed per module, never
+// for our own `so` (static test S5). Remove each line when the step that uses the module lands.
+#[allow(dead_code)]
 mod audio_feedback;
 pub mod audio_toolkit;
 mod autostart;
 mod catalog;
+#[allow(dead_code)]
 mod chinese_script;
 pub mod cli;
+#[allow(dead_code)]
 mod clipboard;
 mod commands;
 pub mod engine_supervisor;
 mod helpers;
+#[allow(dead_code)]
 mod input;
+#[allow(dead_code)]
 mod language_detection;
 mod languages;
+#[allow(dead_code)]
 mod managers;
 mod memory;
+#[allow(dead_code)]
 mod notices;
+#[allow(dead_code)]
 mod overlay;
+#[allow(dead_code)]
 mod paste_tx;
 pub mod portable;
+#[allow(dead_code)]
 mod secure_input;
+#[allow(dead_code)]
 mod settings;
+#[allow(dead_code)]
 mod shortcut;
 mod so;
 mod system_languages;
+#[allow(dead_code)]
 mod tray;
 mod tray_i18n;
+#[allow(dead_code)]
 mod utils;
 pub mod webkit_renderer;
 
@@ -362,9 +375,10 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         });
     }
 
-    // Apply the autostart preference (SMAppService login item on macOS 13+,
-    // tauri-plugin-autostart elsewhere)
-    autostart::apply_autostart(app_handle, settings.autostart_enabled);
+    // Launch at login is forced OFF on every start until step 9 (onboarding + release).
+    // This also removes any login item left over from earlier test builds.
+    // The stored `autostart_enabled` setting is ignored on purpose.
+    autostart::apply_autostart(app_handle, false);
 
     // Create the recording overlay window (hidden by default)
     utils::create_recording_overlay(app_handle);

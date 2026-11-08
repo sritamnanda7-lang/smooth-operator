@@ -67,7 +67,8 @@ const fresh = (): Persisted => ({
   welcomeBack: false,
   lessons: { hold: false, tap: false },
   returnTo: null,
-  atLogin: true,
+  // Launch at login is off until step 9 (release); see lib.rs apply_autostart.
+  atLogin: false,
 });
 
 const isStringList = (v: unknown): v is string[] =>

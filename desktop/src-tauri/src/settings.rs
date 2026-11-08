@@ -684,10 +684,10 @@ impl AppSettings {
 
 /// Startup entry point. Same load-or-create/salvage/migrate behavior as
 /// `get_settings`; kept as a named alias for call-site clarity, plus a
-/// one-time debug dump of the loaded settings.
+/// one-time debug line (settings schema version only: the full settings can hold secrets).
 pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
     let settings = get_settings(app);
-    debug!("Loaded settings: {:?}", settings);
+    debug!("Loaded settings (schema version {})", settings.settings_schema_version);
     settings
 }
 
