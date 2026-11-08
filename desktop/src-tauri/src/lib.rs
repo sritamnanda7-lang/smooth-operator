@@ -630,7 +630,11 @@ pub fn run(cli_args: CliArgs) {
                     .min_inner_size(utils::MAIN_WINDOW_SIZE.0, utils::MAIN_WINDOW_SIZE.1)
                     .resizable(true)
                     .maximizable(true)
-                    .visible(false);
+                    .visible(false)
+                    // Our own origin only; no new windows (a link or window.open can never
+                    // load a web page into the window that holds our commands).
+                    .on_navigation(so::webview::main_nav_allowed)
+                    .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Deny);
 
             if let Some(data_dir) = portable::data_dir() {
                 win_builder = win_builder.data_directory(data_dir.join("webview"));

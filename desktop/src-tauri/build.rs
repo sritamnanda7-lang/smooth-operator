@@ -1,5 +1,121 @@
 // SPDX-License-Identifier: MIT
-// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): Apple Intelligence Swift bridge removed.
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): Apple Intelligence Swift bridge removed;
+// app commands are listed in an AppManifest (step 1 hardening).
+
+/// Every app command the web pages could ever call. Listing them here (an "AppManifest") makes Tauri
+/// check each call against a capability file: a command no capability grants is refused for every
+/// window. Keep this list equal to `collect_commands!` in lib.rs (a static test checks that).
+type CommandNames = &'static [&'static str];
+const APP_COMMANDS: CommandNames = &[
+    "change_binding",
+    "reset_binding",
+    "change_shortcut_activation_setting",
+    "change_hold_threshold_ms_setting",
+    "change_audio_feedback_setting",
+    "change_audio_feedback_volume_setting",
+    "change_sound_theme_setting",
+    "change_theme_setting",
+    "change_start_hidden_setting",
+    "change_autostart_setting",
+    "change_translate_to_english_setting",
+    "change_selected_language_setting",
+    "change_spoken_languages_setting",
+    "change_overlay_position_setting",
+    "change_overlay_style_setting",
+    "change_debug_mode_setting",
+    "change_word_correction_threshold_setting",
+    "change_extra_recording_buffer_setting",
+    "change_language_detection_setting",
+    "change_language_detection_window_setting",
+    "change_paste_delay_ms_setting",
+    "change_paste_delay_after_ms_setting",
+    "change_reliable_paste_setting",
+    "change_paste_method_setting",
+    "get_available_typing_tools",
+    "change_typing_tool_setting",
+    "change_clipboard_handling_setting",
+    "change_experimental_enabled_setting",
+    "update_custom_words",
+    "suspend_all_bindings",
+    "resume_all_bindings",
+    "change_mute_while_recording_setting",
+    "change_append_trailing_space_setting",
+    "change_lazy_stream_close_setting",
+    "change_vad_enabled_setting",
+    "change_long_form_chunking_setting",
+    "change_vad_backend_setting",
+    "change_filler_word_removal_enabled_setting",
+    "change_chinese_script_setting",
+    "change_app_language_setting",
+    "change_keyboard_implementation_setting",
+    "get_keyboard_implementation",
+    "change_show_tray_icon_setting",
+    "change_transcribe_accelerator_setting",
+    "change_transcribe_gpu_device",
+    "get_available_accelerators",
+    "start_handy_keys_recording",
+    "stop_handy_keys_recording",
+    "get_secure_input_status",
+    "run_keyboard_diagnostic",
+    "show_main_window_command",
+    "cancel_operation",
+    "is_portable",
+    "get_app_dir_path",
+    "get_app_settings",
+    "get_default_settings",
+    "get_log_dir_path",
+    "set_log_level",
+    "open_log_dir",
+    "open_app_data_dir",
+    "initialize_enigo",
+    "initialize_shortcuts",
+    "complete_onboarding",
+    "get_available_models",
+    "get_model_info",
+    "download_model",
+    "download_language_detector",
+    "is_language_detector_downloaded",
+    "delete_model",
+    "get_retired_models",
+    "delete_retired_model",
+    "cancel_download",
+    "set_active_model",
+    "get_current_model",
+    "get_transcription_model_status",
+    "is_model_loading",
+    "rescan_local_models",
+    "update_microphone_mode",
+    "get_microphone_mode",
+    "get_windows_microphone_permission_status",
+    "open_microphone_privacy_settings",
+    "get_available_microphones",
+    "set_selected_microphone",
+    "get_selected_microphone",
+    "get_available_output_devices",
+    "set_selected_output_device",
+    "get_selected_output_device",
+    "play_test_sound",
+    "check_custom_sounds",
+    "set_clamshell_microphone",
+    "get_clamshell_microphone",
+    "is_recording",
+    "get_microphone_channels",
+    "set_selected_channel",
+    "change_airpods_mode_setting",
+    "set_model_unload_timeout",
+    "get_model_load_status",
+    "get_language_status",
+    "unload_model_manually",
+    "is_laptop",
+    "get_active_notices",
+    "dismiss_notice",
+    "dismiss_overlay_notice",
+    "so_get_hotkey",
+    "so_set_hotkey",
+    "so_hotkey_options",
+    "so_fn_check",
+];
+
 fn main() {
     generate_tray_translations();
 
@@ -35,7 +151,11 @@ fn main() {
     // Must run after transcribe staging because that helper recreates transcribe-libs/.
     stage_vc_runtime_dlls();
 
-    tauri_build::build()
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(tauri_build::AppManifest::new().commands(APP_COMMANDS)),
+    )
+    .expect("failed to run tauri-build");
 }
 
 /// Link clang's compiler runtime, which provides `__isPlatformVersionAtLeast`.
