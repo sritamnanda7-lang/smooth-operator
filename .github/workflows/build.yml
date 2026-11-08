@@ -71,6 +71,9 @@ jobs:
         working-directory: desktop/src-tauri
         run: cargo test --locked
 
+      - name: Clippy gate (our code only, src/so/)
+        run: scripts/clippy-ours.sh
+
       - name: Build (unsigned, dmg)
         working-directory: desktop
         run: bun run tauri build --bundles dmg -- --locked
