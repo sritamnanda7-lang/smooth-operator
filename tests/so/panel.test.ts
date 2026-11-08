@@ -2,26 +2,30 @@
 // @vitest-environment happy-dom
 // V1-V3: the panel page renders untrusted text safely. happy-dom stands in for the webview.
 import { beforeEach, describe, expect, it } from "vitest";
+import { Window } from "happy-dom";
 import { KIND_CLASS, installSoPanel, renderPayload } from "../../desktop/src/so/panel/render";
 
 type SoPanel = { set: (p: unknown) => void };
-const win = () => window as unknown as { soPanel?: SoPanel };
+// A fresh happy-dom Window per test: soPanel is non-configurable, so it can never be deleted or reinstalled.
+let w: Window;
+const win = () => w as unknown as { soPanel?: SoPanel };
+const asWin = () => w as unknown as globalThis.Window;
 
 let root: HTMLElement;
 beforeEach(() => {
-  document.body.innerHTML = "";
-  root = document.createElement("div");
+  w = new Window();
+  root = w.document.createElement("div") as unknown as HTMLElement;
   root.id = "panel";
-  document.body.appendChild(root);
-  delete (window as unknown as Record<string, unknown>).soPanel;
+  w.document.body.appendChild(root as never);
 });
 
-const payload = (lines: unknown[], v: unknown = 1) => ({ v, lines });
+// v is passed as-is; only an omitted argument means version 1.
+const payload = (lines: unknown[], ...v: unknown[]) => ({ v: v.length ? v[0] : 1, lines });
 const line = (text: string, kind = "info") => ({ text, kind });
 
 describe("V1 text is literal", () => {
   it("renders <img onerror> as text with no extra elements", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     const evil = "<img src=x onerror=alert(1)>";
     win().soPanel!.set(payload([line(evil)]));
     expect(root.querySelectorAll("img").length).toBe(0);
@@ -38,14 +42,14 @@ describe("V1 text is literal", () => {
   });
 
   it("window.soPanel cannot be reassigned, deleted, redefined or changed", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     const original = win().soPanel!;
     expect(() => {
-      (window as unknown as Record<string, unknown>).soPanel = { set: () => {} };
+      (w as unknown as Record<string, unknown>).soPanel = { set: () => {} };
     }).toThrow(TypeError);
-    expect(Reflect.set(window, "soPanel", {})).toBe(false);
-    expect(Reflect.deleteProperty(window, "soPanel")).toBe(false);
-    expect(() => Object.defineProperty(window, "soPanel", { value: {} })).toThrow(TypeError);
+    expect(Reflect.set(w, "soPanel", {})).toBe(false);
+    expect(Reflect.deleteProperty(w, "soPanel")).toBe(false);
+    expect(() => Object.defineProperty(w, "soPanel", { value: {} })).toThrow(TypeError);
     expect(win().soPanel).toBe(original);
     expect(Object.isFrozen(original)).toBe(true);
     expect(() => {
@@ -60,7 +64,7 @@ describe("V1 text is literal", () => {
   });
 
   it("set replaces the previous content (no stacking)", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     win().soPanel!.set(payload([line("one"), line("two")]));
     win().soPanel!.set(payload([line("three")]));
     expect(root.children.length).toBe(1);
@@ -70,7 +74,7 @@ describe("V1 text is literal", () => {
 
 describe("V2 bad payloads", () => {
   it("bad version is ignored (previous content stays)", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     win().soPanel!.set(payload([line("good")]));
     for (const v of [2, 0, "1", null, undefined]) {
       win().soPanel!.set(payload([line("bad")], v));
@@ -79,7 +83,7 @@ describe("V2 bad payloads", () => {
   });
 
   it("non-array lines and non-object payloads are ignored", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     win().soPanel!.set(payload([line("good")]));
     for (const bad of [{ v: 1, lines: "x" }, { v: 1, lines: { 0: line("x") } }, { v: 1 }, null, "str", 42, [], undefined]) {
       expect(() => win().soPanel!.set(bad)).not.toThrow();
@@ -89,14 +93,14 @@ describe("V2 bad payloads", () => {
   });
 
   it("more than 6 lines are trimmed to 6", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     win().soPanel!.set(payload(Array.from({ length: 9 }, (_, i) => line(`l${i}`))));
     expect(root.children.length).toBeLessThanOrEqual(6);
     expect(root.children.length).toBeGreaterThan(0);
   });
 
   it("malformed line items never throw or inject", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     expect(() => win().soPanel!.set(payload([null, 5, "s", { text: 3, kind: "info" }, { kind: "info" }, line("ok")]))).not.toThrow();
     expect(root.querySelectorAll("img,script,iframe").length).toBe(0);
     expect(root.textContent).toContain("ok");
@@ -109,14 +113,14 @@ describe("V3 css class only from the fixed map", () => {
       expect(typeof KIND_CLASS[kind], kind).toBe("string");
       expect(KIND_CLASS[kind].length).toBeGreaterThan(0);
     }
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     win().soPanel!.set(payload([line("a", "info"), line("b", "listening"), line("c", "warn")]));
     const els = Array.from(root.children);
     expect(els.map((e) => e.className)).toEqual([KIND_CLASS.info, KIND_CLASS.listening, KIND_CLASS.warn]);
   });
 
   it("unknown or hostile kinds never reach the class attribute", () => {
-    installSoPanel(window, root);
+    installSoPanel(asWin(), root);
     const hostile = ['x" onclick="alert(1)', "__proto__", "constructor", "toString", "hasOwnProperty", "INFO", "", "a b"];
     for (const kind of hostile) {
       win().soPanel!.set(payload([line("t", kind)]));
