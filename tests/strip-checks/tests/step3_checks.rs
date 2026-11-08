@@ -47,6 +47,14 @@ fn non_test(src: &str) -> String {
 fn assert_none(what: &str, hits: Vec<String>) {
     assert!(hits.is_empty(), "{what}: {} hit(s), first: {:#?}", hits.len(), &hits[..hits.len().min(8)]);
 }
+/// `line` contains `needle`, and if the needle starts with a letter, digit or `_` the match does not start
+/// inside a longer identifier (so `log::` does not match `FsAppCatalog::`).
+fn contains_word_start(line: &str, needle: &str) -> bool {
+    let word = needle.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_');
+    line.match_indices(needle).any(|(i, _)| {
+        !word || !line[..i].chars().next_back().is_some_and(|c| c.is_alphanumeric() || c == '_')
+    })
+}
 /// Non-comment, non-test lines of every `so/rules` file (optionally skipping one file name) containing a needle.
 fn rules_hits(needles: &[&str], skip: Option<&str>) -> Vec<String> {
     let mut hits = vec![];
@@ -56,7 +64,7 @@ fn rules_hits(needles: &[&str], skip: Option<&str>) -> Vec<String> {
         }
         let txt = non_test(&fs::read_to_string(&f).unwrap_or_default());
         for (i, line) in txt.lines().enumerate() {
-            if !is_comment(line) && needles.iter().any(|n| line.contains(n)) {
+            if !is_comment(line) && needles.iter().any(|n| contains_word_start(line, n)) {
                 hits.push(format!("{}:{}: {}", relp(&f), i + 1, line.trim()));
             }
         }

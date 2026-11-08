@@ -183,8 +183,8 @@ fn r6_inner() {
     let launcher = Arc::new(FakeLauncher::default());
     let catalog = FakeCatalog::new(vec![
         app("Zxqsentinelapp", false),
-        app("Zxqsentineldrive One", false),
-        app("Zxqsentineldrive Two", false),
+        app("Google Zxqsentineldrive", false),
+        app("Adobe Zxqsentineldrive", false),
     ]);
     let router = Arc::new(FastRouter::new(media.clone(), catalog, launcher.clone(), clock.clone()));
     let rig = Rig::with_router(clock, Arc::new(Log::default()), router, "pause");
@@ -195,7 +195,7 @@ fn r6_inner() {
     say("pause"); // media, outcome 1
     say("open zxqsentinelapp"); // open, outcome 2
     say("open zxqsentinelnothing"); // not found, outcome 4
-    say("open zxqsentineldrive"); // ambiguous, outcome 5
+    say("open zxqsentineldrive"); // ambiguous via the vendor-trim tier (Google/Adobe), outcome 5
     *media.err.lock().unwrap() = Some("ZXQSENTINELERR".into());
     say("next"); // action failed, outcome 6
     *launcher.err.lock().unwrap() = Some("ZXQSENTINELERR /zxqpath".into());
