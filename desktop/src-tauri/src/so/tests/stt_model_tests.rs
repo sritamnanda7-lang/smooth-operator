@@ -2,7 +2,7 @@
 //! Step 2 tests T21-T24: the pinned model, the one-model registry, download verification, settings.
 //!
 //! PLACEHOLDER NOTE: `SO_MODEL` in `so/stt/model.rs` holds invalid placeholder values until the benchmark
-//! picks a model and the founder uploads it to `smoothoperator/<repo>` (sub-steps 2-3). T21 fails until
+//! picks a model and the founder uploads it to `smoothoperator3/<repo>` (sub-steps 2-3). T21 fails until
 //! the real repo, 40-hex commit, file name, SHA-256 and size are filled in. The tests below never name
 //! them, so they need no change then.
 use crate::managers::model::ModelSource;
@@ -23,7 +23,7 @@ fn spec_for(bytes: &[u8]) -> ModelSpec {
     ModelSpec {
         id: "so/test-model",
         filename: "test-model.gguf",
-        url: "https://huggingface.co/smoothoperator/test/resolve/0000000000000000000000000000000000000000/test-model.gguf",
+        url: "https://huggingface.co/smoothoperator3/test/resolve/0000000000000000000000000000000000000000/test-model.gguf",
         sha256: Box::leak(sha.into_boxed_str()),
         size: bytes.len() as u64,
     }
@@ -32,9 +32,9 @@ fn spec_for(bytes: &[u8]) -> ModelSpec {
 #[test]
 fn t21_so_model_is_pinned_to_our_hf_repo_commit_and_sha256() {
     let m = SO_MODEL;
-    assert!(m.url.starts_with("https://huggingface.co/smoothoperator/"), "url: {}", m.url);
+    assert!(m.url.starts_with("https://huggingface.co/smoothoperator3/"), "url: {}", m.url);
     let parts: Vec<&str> = m.url.split('/').collect();
-    // https: "" huggingface.co smoothoperator <repo> resolve <commit> <file...>
+    // https: "" huggingface.co smoothoperator3 <repo> resolve <commit> <file...>
     assert!(parts.len() >= 8, "url shape: {}", m.url);
     assert!(!parts[4].is_empty(), "repo name");
     assert_eq!(parts[5], "resolve");

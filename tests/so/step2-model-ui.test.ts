@@ -93,7 +93,8 @@ describe("V1 ModelPane view", () => {
   it("always has a licence credit line", () => {
     for (const dl of [idle, { kind: "verifying" } as DlState]) {
       const v = modelPaneView([row(SO_MODEL_ID)], dl);
-      expect(v.credit).toMatch(/CC-BY-4\.0|MIT|Apache/);
+      expect(v.credit).toBe("Licensed by NVIDIA Corporation under the NVIDIA Open Model License");
+      expect(v.credit).not.toMatch(/handy/i);
     }
   });
 

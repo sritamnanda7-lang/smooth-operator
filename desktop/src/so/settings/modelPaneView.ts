@@ -44,9 +44,9 @@ export interface ModelApi {
 const MB = 1024 * 1024;
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
-/** The licence credit. The model is under NVIDIA's licence (not CC-BY); the engine around it is Handy (MIT). */
+/** The licence credit. The model is under NVIDIA's licence (not CC-BY). */
 export const MODEL_CREDIT =
-  "Licensed by NVIDIA Corporation under the NVIDIA Open Model License. Speech engine: Handy (MIT).";
+  "Licensed by NVIDIA Corporation under the NVIDIA Open Model License";
 
 /** Pick the `SO_MODEL_ID` row out of `rows` and describe it for the pane. */
 export function modelPaneView(rows: ModelRow[], dl: DlState): ModelPaneView {

@@ -110,8 +110,10 @@ fn t02_lone_tap_does_nothing() {
     let mut r = Rig::new(HotkeyChoice::Fn);
     assert!(r.down(0).is_empty());
     assert!(r.up(120).is_empty());
-    assert!(!r.e.needs_tick());
+    // Step 2 (T20): a lone tap keeps ticking until its 400 ms double-tap window expires.
+    assert!(r.e.needs_tick());
     assert!(r.tick(1000).is_empty());
+    assert!(!r.e.needs_tick());
 }
 
 #[test]
@@ -404,6 +406,9 @@ fn t29_flags_show_target_up_while_we_think_down_is_a_release() {
     // The Fn-up event was lost. The next event (A key-up) carries flags without Fn.
     let out = d.feed(&keyev(NONE, Key::A, false), t0 + Duration::from_millis(100));
     assert_eq!(out, vec![DetOut::Release { clean: true }]);
+    // Step 2 (T20): a short clean release is a tap; it ticks until the double-tap window expires.
+    assert!(d.needs_tick());
+    assert_eq!(d.tick(t0 + Duration::from_millis(600)), vec![DetOut::TapExpired]);
     assert!(!d.needs_tick());
 }
 
