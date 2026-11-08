@@ -235,9 +235,11 @@ fn i4_an_injected_phrase_makes_an_in_flight_speech_text_stale() {
 
 #[test]
 fn i4_a_speech_talk_that_starts_while_the_injected_phrase_is_routing_owns_the_panel() {
-    // The window between the stale check and the action is microseconds, so the action itself cannot be
-    // held back deterministically (plan: harmless, both are Safe). What must hold: the older typed
-    // phrase never writes over the newer talk's panel.
+    // The window between the stale check and the action is short but real: the caller of `inject` holds
+    // the talk number, and a speech talk can start any time before the router returns (the router may
+    // take up to ~2 s: `open` waits that long). The action itself cannot be held back deterministically
+    // (plan: harmless, both are Safe). What must hold: the older typed phrase never writes over the newer
+    // talk's panel.
     let dir = tmp();
     let router = FakeRouter::new(Arc::new(Log::default()), Route::Handled(vec![info("Play/pause sent")]));
     *router.delay.lock().unwrap() = Duration::from_millis(600);
@@ -357,4 +359,62 @@ fn i6_inner() {
     }
     found.sort();
     assert_eq!(found, vec![SOCKET_DIR.to_string(), format!("{SOCKET_DIR}/{SOCKET_NAME}")], "files created: {found:?}");
+}
+
+// ---------- review #2: a typed phrase must not renumber a live speech talk ----------
+fn talk_then_typed() -> (Rig, Arc<FakeRouter>) {
+    let router = FakeRouter::new(Arc::new(Log::default()), Route::Handled(vec![info("Play/pause sent")]));
+    let rig = Rig::with_router(FakeClock::new(), Arc::new(Log::default()), router.clone(), "spoken words");
+    *rig.tr.delay.lock().unwrap() = Duration::from_millis(100);
+    rig.ev(Armed);
+    rig.ev(Started(PushToTalk)); // speech talk n
+    wait("Listening", || rig.panel.texts().iter().any(|t| t == "Listening"));
+    rig.sink.inject_transcript("typed words".into()); // talk n+1
+    wait("typed routed", || router.texts() == vec!["typed words"]);
+    rig.wait_line("Play/pause sent");
+    (rig, router)
+}
+
+#[test]
+fn review2_a_speech_talk_that_ends_after_a_typed_phrase_is_stale_and_dropped_once() {
+    let (rig, router) = talk_then_typed();
+    rig.ev(crate::so::hotkey::session::TalkEvent::Stopped(PushToTalk)); // talk n ends, text "spoken words"
+    wait("transcribed", || rig.log.count("tr.transcribe") == 1);
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(router.texts(), vec!["typed words"], "talk n is older than the typed phrase: its text must be dropped");
+    assert!(rig.panel.all_line_texts().iter().all(|t| t != "Heard: spoken words"), "{:?}", rig.panel.all_line_texts());
+    assert_eq!(rig.panel.last_payload().unwrap(), PanelPayload::new(vec![info("Heard: typed words"), info("Play/pause sent")]));
+}
+
+#[test]
+fn review2_a_speech_cancel_after_a_typed_phrase_does_not_hide_the_typed_panel() {
+    let (rig, _router) = talk_then_typed();
+    rig.ev(crate::so::hotkey::session::TalkEvent::Cancelled(PushToTalk)); // the speech talk is cancelled
+    thread::sleep(Duration::from_millis(500));
+    assert_eq!(rig.panel.hides(), 0, "the cancel belongs to the older talk and must not hide the typed phrase's lines");
+    assert_eq!(rig.panel.last_payload().unwrap().lines.len(), 2);
+}
+
+#[test]
+fn review2_positive_control_a_speech_talk_after_a_finished_typed_phrase_is_routed() {
+    let router = FakeRouter::new(Arc::new(Log::default()), Route::Handled(vec![info("Play/pause sent")]));
+    let rig = Rig::with_router(FakeClock::new(), Arc::new(Log::default()), router.clone(), "x");
+    rig.sink.inject_transcript("typed words".into());
+    wait("typed routed", || router.texts() == vec!["typed words"]);
+    rig.say("next words");
+    wait("speech routed", || router.texts().len() == 2);
+    assert_eq!(router.texts()[1], "next words");
+}
+
+// ---------- nit: so-debug must not be a symlink ----------
+#[test]
+fn nit_a_so_debug_folder_that_is_a_symlink_stops_the_start_and_the_target_stays_untouched() {
+    let dir = tmp();
+    let elsewhere = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(elsewhere.path(), dir.path().join(SOCKET_DIR)).unwrap();
+    let before = std::fs::metadata(elsewhere.path()).unwrap().permissions().mode();
+    let (_seen, inject) = recorder();
+    assert!(start(dir.path(), true, inject).is_none(), "a symlinked so-debug must be refused");
+    assert!(!elsewhere.path().join(SOCKET_NAME).exists(), "no socket inside the link target");
+    assert_eq!(std::fs::metadata(elsewhere.path()).unwrap().permissions().mode(), before, "the target's mode is untouched");
 }

@@ -264,6 +264,29 @@ fn i7_debug_input_has_no_command_invoke_capability_or_network_listener() {
     }
 }
 
+// ---- review #3 and nit: real.rs hardening (the real Enigo/launcher cannot be faked behind the traits) ----
+#[test]
+fn review3_a_timed_out_media_key_request_carries_a_cancel_flag_checked_before_the_key_is_sent() {
+    let txt = non_test(&read(&format!("{RULES}/real.rs")));
+    let code: Vec<&str> = txt.lines().filter(|l| !is_comment(l)).collect();
+    let code = code.join("\n");
+    let press = code.split("fn press(").nth(1).expect("EnigoMediaKeys::press").split("pub struct OpenLauncher").next().unwrap();
+    assert!(press.contains("AtomicBool"), "press must share a cancel flag (AtomicBool) with the queued closure");
+    let flag_at = press.find("load(").expect("the closure must read the flag");
+    let key_at = press.find("enigo.key(").expect("the closure sends the key");
+    assert!(flag_at < key_at, "the flag must be read before enigo.key(...)");
+    assert!(press.contains("store(true"), "the timeout path must set the flag");
+}
+
+#[test]
+fn nit_open_launcher_refuses_a_non_absolute_path() {
+    let txt = non_test(&read(&format!("{RULES}/real.rs")));
+    let open = txt.split("impl AppLauncher for OpenLauncher").nth(1).expect("OpenLauncher impl");
+    let spawn_at = open.find(".spawn()").expect("spawn");
+    let abs_at = open.find("is_absolute()").expect("open() must check app.is_absolute()");
+    assert!(abs_at < spawn_at, "the absolute-path check must come before spawning");
+}
+
 // ---- R7: step-2 tests are not edited ----
 #[test]
 fn r7_step_2_test_files_are_unchanged_since_the_step_2_tag() {

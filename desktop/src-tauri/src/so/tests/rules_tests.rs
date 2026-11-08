@@ -364,7 +364,14 @@ fn f3_switch_to_an_app_that_is_not_running_follows_q2() {
     let got = lines(r.route("switch to calculator"));
     assert_eq!(r.launcher.opens(), vec![PathBuf::from("/Applications/Calculator.app")]);
     assert_eq!(got.len(), 1);
-    assert!(!got[0].text.is_empty());
+    assert_eq!(got[0].text, "Switching to calculator", "every switch says Switching to X, running or not");
+    assert_eq!(got[0].kind, Kind::Info);
+    // `open` for an app that is not running says Opening X; X is the shown (normalised, cut) name.
+    let r = R::new(vec![app("Calculator", false)]);
+    assert_eq!(lines(r.route("Open Calculator!"))[0].text, "Opening calculator");
+    let long = "z".repeat(40);
+    let r = R::new(vec![app(&long, false)]);
+    assert_eq!(lines(r.route(&format!("switch to {long}")))[0].text, format!("Switching to {long}"));
 }
 
 #[test]
