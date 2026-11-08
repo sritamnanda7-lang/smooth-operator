@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { commands } from "@/bindings";
 import { LANGUAGE_DETECTION_MODEL, modelFile } from "@handy-computer/models";
 import { useModelStore } from "@/stores/modelStore";
 import { BYTES_PER_MB, formatModelSize } from "@/lib/utils/format";
@@ -22,7 +21,8 @@ export const useLanguageDetector = () => {
   );
 
   const refresh = useCallback(
-    () => commands.isLanguageDetectorDownloaded().then(setDownloaded),
+    // Smooth Operator ships no language detector: it is never on disk.
+    () => Promise.resolve(false).then(setDownloaded),
     [],
   );
 
@@ -40,7 +40,7 @@ export const useLanguageDetector = () => {
     setStarting(true);
     try {
       // Failure notices come from the model store's download-failed listener.
-      await commands.downloadLanguageDetector();
+      // Smooth Operator ships no language detector (English-only model): nothing to download.
     } finally {
       setStarting(false);
     }

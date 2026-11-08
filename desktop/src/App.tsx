@@ -17,45 +17,29 @@ import "./App.css";
 import SecureInputWarning from "./components/SecureInputWarning";
 import Footer from "./components/footer";
 import { OnboardingFlow } from "./components/onboarding/OnboardingFlow";
-import ModelMigration from "./components/onboarding/ModelMigration";
-import {
-  ReplaceModel,
-  ReturningPermissions,
-} from "./components/onboarding/StandaloneScreens";
+import { ReturningPermissions } from "@/so/onboarding/ReturningPermissions";
 import {
   clearOnboardingProgress,
   type OnboardingStep as OnboardingPreviewStep,
 } from "./components/onboarding/onboardingStore";
-import { DebugSettings, ModelsSettings } from "./components/settings";
+import { DebugSettings } from "./components/settings";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { Sidebar, SidebarSection, SECTIONS_CONFIG } from "./components/Sidebar";
 import { useSettings } from "./hooks/useSettings";
 import { useSettingsStore } from "./stores/settingsStore";
 import { commands } from "@/bindings";
-import { deleteRetiredModel } from "@/lib/models/retired";
 import { NoticePanel } from "@/components/notices/NoticePanel";
 import { getLanguageDirection, initializeRTL } from "@/lib/utils/rtl";
 
 // flow is first-run onboarding; the rest are single screens for returning users.
-type OnboardingStep =
-  | "flow"
-  | "permissions"
-  | "migration"
-  | "replaceModel"
-  | "done";
+type OnboardingStep = "flow" | "permissions" | "done";
 
 const renderSettingsContent = (
   section: SidebarSection,
   onPreviewOnboarding: (step: OnboardingPreviewStep) => void,
   onRunOnboarding: () => void,
   onRunModelMigration: () => void,
-  onSectionChange: (section: SidebarSection) => void,
 ) => {
-  if (section === "models") {
-    return (
-      <ModelsSettings onChangeLanguages={() => onSectionChange("general")} />
-    );
-  }
   if (section === "debug") {
     return (
       <DebugSettings
@@ -78,9 +62,6 @@ function App() {
   );
   const [onboardingPreview, setOnboardingPreview] =
     useState<OnboardingPreviewStep | null>(null);
-  // Set when a returning user's selected model is a retired (ONNX) model that
-  // is still on disk: they must update it before the app can transcribe.
-  const [migrationModelId, setMigrationModelId] = useState<string | null>(null);
   const [currentSection, setCurrentSection] =
     useState<SidebarSection>("general");
   const { settings, updateSetting } = useSettings();
@@ -155,22 +136,9 @@ function App() {
     }
   };
 
-  const getMigrationModelId = async (
-    selectedModel: string,
-  ): Promise<string | null> => {
-    const retired = await commands.getRetiredModels();
-    return retired.some((m) => m.id === selectedModel) ? selectedModel : null;
-  };
-
-  // Returning users land in the app unless their model needs updating. The
-  // window may start hidden, so bring it forward for the update screen.
-  const finishReturningUser = async (retiredModelId: string | null) => {
-    if (retiredModelId) {
-      await revealMainWindowForPermissions();
-      setOnboardingStep("migration");
-    } else {
-      setOnboardingStep("done");
-    }
+  // Returning users land in the app (one fixed speech model: no model migration screen).
+  const finishReturningUser = async () => {
+    setOnboardingStep("done");
   };
 
   const checkOnboardingStatus = async () => {
@@ -183,11 +151,6 @@ function App() {
 
       if (hasCompletedOnboarding) {
         // Returning user - check if they need to grant permissions first
-        const retiredModelId = await getMigrationModelId(
-          settingsResult.data.selected_model ?? "",
-        );
-        setMigrationModelId(retiredModelId);
-
         if (currentPlatform === "macos") {
           try {
             const [hasAccessibility, hasMicrophone] = await Promise.all([
@@ -223,7 +186,7 @@ function App() {
           }
         }
 
-        await finishReturningUser(retiredModelId);
+        await finishReturningUser();
       } else {
         // New user - start full onboarding
         setOnboardingStep("flow");
@@ -240,27 +203,9 @@ function App() {
     setOnboardingStep("flow");
   };
 
-  // Debug: the real model migration screen. It leads with the selected model
-  // if that's retired, otherwise with the first retired model on disk.
-  const runModelMigration = async () => {
-    const retired = await commands.getRetiredModels();
-    if (retired.length === 0) {
-      console.info("Model migration: no old-format models on disk");
-      return;
-    }
-    const selected = settings?.selected_model;
-    setMigrationModelId(
-      retired.find((m) => m.id === selected)?.id ?? retired[0].id,
-    );
-    setOnboardingStep("migration");
-  };
-
-  const handleModelSelected = async () => {
-    // Reached when the user picks a different model instead of updating.
-    for (const model of await commands.getRetiredModels()) {
-      await deleteRetiredModel(model.id);
-    }
-    setOnboardingStep("done");
+  // Debug button handler kept for DebugSettings' props; there is no migration screen any more.
+  const runModelMigration = () => {
+    console.info("Model migration: not used (one fixed speech model)");
   };
 
   // Still checking onboarding status
@@ -295,22 +240,7 @@ function App() {
   } else if (onboardingStep === "permissions") {
     content = (
       <ReturningPermissions
-        onComplete={() => finishReturningUser(migrationModelId)}
-      />
-    );
-  } else if (onboardingStep === "migration" && migrationModelId) {
-    content = (
-      <ModelMigration
-        inUseModelId={migrationModelId}
-        onComplete={() => setOnboardingStep("done")}
-        onChooseAnother={() => setOnboardingStep("replaceModel")}
-      />
-    );
-  } else if (onboardingStep === "replaceModel") {
-    content = (
-      <ReplaceModel
-        onBack={() => setOnboardingStep("migration")}
-        onComplete={handleModelSelected}
+        onComplete={() => finishReturningUser()}
       />
     );
   } else {
@@ -338,7 +268,6 @@ function App() {
                   setOnboardingPreview,
                   runOnboarding,
                   runModelMigration,
-                  setCurrentSection,
                 )}
               </div>
             </div>

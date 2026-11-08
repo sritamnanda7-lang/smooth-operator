@@ -6,7 +6,8 @@ import { Cpu, FlaskConical, Info, Settings } from "lucide-react";
 import { Wordmark } from "@/so/Wordmark";
 import { GeneralPane } from "@/so/settings/GeneralPane";
 import { useSettings } from "../hooks/useSettings";
-import { AboutSettings, ModelsSettings } from "./settings";
+import { ModelPane } from "@/so/settings/ModelPane";
+import { AboutSettings } from "./settings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
 
@@ -36,7 +37,7 @@ export const SECTIONS_CONFIG = {
   models: {
     labelKey: "sidebar.models",
     icon: Cpu,
-    component: ModelsSettings,
+    component: ModelPane,
     enabled: () => true,
   },
   debug: {

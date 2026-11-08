@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
 // View logic for the onboarding model step. Pure. Tests: tests/so/step2-model-ui.test.ts (V2).
-// STEP-2 STUBS: both functions throw until the builder implements them (sub-step 4).
-import type { DlState, ModelApi } from "../settings/modelPaneView";
+import { SO_MODEL_ID, type DlState, type ModelApi } from "../settings/modelPaneView";
 
 export interface SoModelStepView {
   /** Continue is allowed while the download runs (and when it failed: onboarding never blocks on it). */
@@ -12,12 +11,21 @@ export interface SoModelStepView {
   status: string;
 }
 
-/** STEP-2 STUB. */
-export function soModelStepView(_dl: DlState, _ready: boolean): SoModelStepView {
-  throw new Error("step 2 stub: soModelStepView");
+/** Describe the step. Continue is always allowed: onboarding never waits for the download. */
+export function soModelStepView(dl: DlState, ready: boolean): SoModelStepView {
+  const status = ready
+    ? "Ready"
+    : dl.kind === "downloading"
+      ? `Downloading ${Math.max(0, Math.min(100, Math.round(dl.percent)))}%`
+      : dl.kind === "verifying"
+        ? "Verifying"
+        : dl.kind === "error"
+          ? "Download failed"
+          : "Not downloaded";
+  return { continueEnabled: true, showRetry: dl.kind === "error", status };
 }
 
-/** STEP-2 STUB. Retry = start the download of `SO_MODEL_ID` again. */
-export async function retryDownload(_api: Pick<ModelApi, "downloadModel">): Promise<void> {
-  throw new Error("step 2 stub: retryDownload");
+/** Retry = start the download of `SO_MODEL_ID` again. */
+export async function retryDownload(api: Pick<ModelApi, "downloadModel">): Promise<void> {
+  await api.downloadModel(SO_MODEL_ID);
 }
