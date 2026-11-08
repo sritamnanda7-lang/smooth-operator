@@ -380,8 +380,8 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     // The stored `autostart_enabled` setting is ignored on purpose.
     autostart::apply_autostart(app_handle, false);
 
-    // Create the recording overlay window (hidden by default)
-    utils::create_recording_overlay(app_handle);
+    // Create our floating panel (hidden by default). It replaces Handy's recording overlay.
+    so::panel::create(app_handle);
 }
 
 #[tauri::command]
@@ -836,6 +836,8 @@ pub fn run(cli_args: CliArgs) {
             }
             show_main_window(app);
         }
+        // Stop our key watcher thread (it never blocks quitting).
+        tauri::RunEvent::Exit => so::hotkey::shutdown(),
         // No transcription teardown on exit: transcribe.cpp runs only in the
         // worker process, which exits by itself as soon as this process's end
         // of its stdin closes, even if it is hung. Waiting on an unload here

@@ -1,4 +1,13 @@
 <!doctype html>
-<!-- // SPDX-License-Identifier: FSL-1.1-MIT -->
-<!-- STUB: the builder writes the panel page (no inline script or style). -->
-<html lang="en"><head><meta charset="utf-8" /><title>Smooth Operator panel</title></head><body></body></html>
+<!-- SPDX-License-Identifier: FSL-1.1-MIT -->
+<!-- Panel page. Text only; no inline script or style; no IPC. Strict CSP comes from tauri.conf.json. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Smooth Operator panel</title>
+  </head>
+  <body>
+    <div id="panel" role="status" aria-live="polite"></div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

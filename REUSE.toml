@@ -249,7 +249,6 @@ path = [
   "desktop/tests/app.spec.ts",
   "desktop/tsconfig.json",
   "desktop/tsconfig.node.json",
-  "desktop/vite.config.ts",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright (c) 2025 CJ Pais"

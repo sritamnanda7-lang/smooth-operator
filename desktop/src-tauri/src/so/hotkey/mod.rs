@@ -165,6 +165,9 @@ static STARTER: Lazy<Starter> = Lazy::new(Starter::new);
 /// shortcuts start, so the permission timing is the same. A failure is shown in the panel and a
 /// later call retries.
 pub fn start(app: &AppHandle, panel: Arc<dyn PanelOut>) {
+    if STARTER.is_started() {
+        return;
+    }
     let initial = settings::load_hotkey(app, Platform::current());
     let app_for_sink = app.clone();
     let sink: Arc<dyn TalkSink> = Arc::new(super::panel::PanelSink::new(
@@ -183,4 +186,9 @@ pub fn start(app: &AppHandle, panel: Arc<dyn PanelOut>) {
 /// stored choice when it starts).
 pub fn set_target(choice: HotkeyChoice) -> bool {
     STARTER.send(Msg::SetTarget(choice))
+}
+
+/// Ask the watcher to stop (the app is quitting).
+pub fn shutdown() {
+    let _ = STARTER.send(Msg::Shutdown);
 }

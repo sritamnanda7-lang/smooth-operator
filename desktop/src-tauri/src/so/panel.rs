@@ -7,8 +7,13 @@ use super::hotkey::watcher::TalkSink;
 use super::settings::HotkeyChoice;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tauri::webview::{NewWindowResponse, PageLoadEvent};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow};
+
+#[cfg(target_os = "macos")]
+use tauri_nspanel::{tauri_panel, CollectionBehavior, PanelBuilder, PanelLevel, StyleMask};
 
 /// Path of the panel page (vite output keeps the source path, like the overlay).
 pub const PAGE_PATH: &str = "/src/so/panel/index.html";
@@ -145,4 +150,184 @@ impl TalkSink for PanelSink {
 /// Panel page navigation rule: own page only. Dev server URL only when `debug` is true.
 pub fn nav_allowed(url: &tauri::Url, debug: bool) -> bool {
     super::webview::app_origin(url, debug) && url.path() == PAGE_PATH
+}
+
+
+// ---------------------------------------------------------------------------------------------
+// The window. (A "non-activating panel" is a macOS window that can be shown without becoming the
+// active app or taking the keyboard: typing keeps going into whatever app you were using.)
+// ---------------------------------------------------------------------------------------------
+
+pub const LABEL: &str = "so_panel";
+const WIDTH: f64 = 440.0;
+const HEIGHT: f64 = 200.0;
+/// Distance from the top of the screen, in logical points / device-independent pixels.
+const TOP_OFFSET: f64 = 40.0;
+
+#[cfg(target_os = "macos")]
+tauri_panel! {
+    panel!(SoPanel {
+        config: {
+            can_become_key_window: false,
+            is_floating_panel: true
+        }
+    })
+}
+
+/// The last payload sent. Resent when the page finishes loading, so text shown before the page
+/// was ready (for example a start-up warning) is not lost.
+static LAST: Mutex<Option<PanelPayload>> = Mutex::new(None);
+
+fn last_payload() -> Option<PanelPayload> {
+    LAST.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+fn set_last(payload: Option<PanelPayload>) {
+    *LAST.lock().unwrap_or_else(|e| e.into_inner()) = payload;
+}
+
+/// The only place that runs JS in the panel: one fixed call with the payload as a data literal.
+fn push(win: &WebviewWindow, payload: &PanelPayload) {
+    let _ = win.eval(&payload.eval_script());
+}
+
+/// Monitor under the mouse, else the primary monitor.
+///
+/// Coordinate spaces (checked on macOS 26 + tao source, step 1): on macOS `cursor_position()` is
+/// PHYSICAL (points x the PRIMARY monitor's scale) but `monitor_from_point` compares against
+/// CGDisplayBounds, which are POINTS, so the cursor must be divided by the primary scale first.
+/// On Windows both are physical, so no conversion.
+fn monitor_for_cursor(app: &AppHandle) -> Option<tauri::Monitor> {
+    let primary = app.primary_monitor().ok().flatten();
+    let found = app.cursor_position().ok().and_then(|pos| {
+        #[cfg(target_os = "macos")]
+        let (x, y) = {
+            let scale = primary.as_ref().map_or(1.0, |m| m.scale_factor());
+            (pos.x / scale, pos.y / scale)
+        };
+        #[cfg(not(target_os = "macos"))]
+        let (x, y) = (pos.x, pos.y);
+        app.monitor_from_point(x, y).ok().flatten()
+    });
+    found.or(primary)
+}
+
+/// Top-center, `TOP_OFFSET` down, on the monitor under the mouse.
+fn place(app: &AppHandle, win: &WebviewWindow) {
+    if let Some(m) = monitor_for_cursor(app) {
+        // Monitor position/size are physical, in that monitor's own scale: divide by it to get points.
+        let s = m.scale_factor();
+        let x = m.position().x as f64 / s + (m.size().width as f64 / s - WIDTH) / 2.0;
+        let y = m.position().y as f64 / s + TOP_OFFSET;
+        let _ = win.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
+    }
+}
+
+/// Builds the hidden panel window and registers `PanelHandle` as app state.
+pub fn create(app: &AppHandle) {
+    let url = WebviewUrl::App(PAGE_PATH.trim_start_matches('/').into());
+    let debug = cfg!(debug_assertions);
+    // Own page only; every `window.open` is denied.
+    let nav = move |u: &tauri::Url| nav_allowed(u, debug);
+    let new_window = |_u: tauri::Url, _f: tauri::webview::NewWindowFeatures| NewWindowResponse::Deny;
+    let on_load = |win: WebviewWindow, payload: tauri::webview::PageLoadPayload<'_>| {
+        if payload.event() == PageLoadEvent::Finished {
+            if let Some(last) = last_payload() {
+                push(&win, &last);
+            }
+        }
+    };
+
+    #[cfg(target_os = "macos")]
+    {
+        let built = PanelBuilder::<_, SoPanel>::new(app, LABEL)
+            .url(url)
+            .title("Smooth Operator panel")
+            .level(PanelLevel::Status)
+            .size(tauri::Size::Logical(tauri::LogicalSize { width: WIDTH, height: HEIGHT }))
+            .has_shadow(false)
+            .transparent(true)
+            .no_activate(true)
+            .corner_radius(0.0)
+            .style_mask(StyleMask::empty().borderless().nonactivating_panel())
+            .with_window(move |w| {
+                w.decorations(false)
+                    .transparent(true)
+                    .focusable(false)
+                    .on_navigation(nav)
+                    .on_new_window(new_window)
+                    .on_page_load(on_load)
+            })
+            .collection_behavior(CollectionBehavior::new().can_join_all_spaces().full_screen_auxiliary())
+            .build();
+        if let Ok(panel) = built {
+            panel.hide();
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = tauri::WebviewWindowBuilder::new(app, LABEL, url)
+            .title("Smooth Operator panel")
+            .resizable(false)
+            .inner_size(WIDTH, HEIGHT)
+            .shadow(false)
+            .maximizable(false)
+            .minimizable(false)
+            .closable(false)
+            .decorations(false)
+            .always_on_top(true)
+            .skip_taskbar(true)
+            .transparent(true)
+            .focusable(false)
+            .focused(false)
+            .visible(false)
+            .on_navigation(nav)
+            .on_new_window(new_window)
+            .on_page_load(on_load)
+            .build();
+    }
+
+    // Step 1: the panel ignores the mouse, so a click goes to the app underneath.
+    if let Some(win) = app.get_webview_window(LABEL) {
+        let _ = win.set_ignore_cursor_events(true);
+    }
+    app.manage(PanelHandle(Arc::new(TauriPanel { app: app.clone() })));
+}
+
+/// Managed app state holding the real panel (so commands and start-up code can reach it).
+pub struct PanelHandle(Arc<dyn PanelOut>);
+
+/// The real panel, as a `PanelOut`.
+pub fn panel_out(app: &AppHandle) -> Arc<dyn PanelOut> {
+    app.state::<PanelHandle>().0.clone()
+}
+
+struct TauriPanel {
+    app: AppHandle,
+}
+
+impl PanelOut for TauriPanel {
+    fn show(&self, payload: PanelPayload) {
+        set_last(Some(payload.clone()));
+        let app = self.app.clone();
+        // Windows must be touched on the main thread.
+        let _ = self.app.run_on_main_thread(move || {
+            if let Some(win) = app.get_webview_window(LABEL) {
+                push(&win, &payload);
+                place(&app, &win);
+                let _ = win.show();
+            }
+        });
+    }
+
+    fn hide(&self) {
+        set_last(None);
+        let app = self.app.clone();
+        let _ = self.app.run_on_main_thread(move || {
+            if let Some(win) = app.get_webview_window(LABEL) {
+                let _ = win.hide();
+            }
+        });
+    }
 }
