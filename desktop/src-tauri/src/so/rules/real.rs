@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
 //! macOS effects: Enigo media keys, `/usr/bin/open`, folder + NSWorkspace app list.
 
-// Aliased: static check S1 searches for the text "log::", which also sits inside "FsAppCatalog::".
-use super::apps::{AppCatalog, AppEntry, FsAppCatalog as FolderScan};
+use super::apps::{AppCatalog, AppEntry, FsAppCatalog};
 use super::hands::{AppLauncher, MediaKeys};
 use super::phrase::MediaKey;
 use crate::input::EnigoState;
@@ -10,7 +9,8 @@ use enigo::{Direction, Key, Keyboard};
 use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::mpsc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc};
 use tauri::Manager;
 use std::time::{Duration, Instant};
 
@@ -41,9 +41,16 @@ impl MediaKeys for EnigoMediaKeys {
         };
         let (tx, rx) = mpsc::sync_channel(1);
         let app = self.app.clone();
+        // Set when we give up waiting: a request still queued on the main thread then sends nothing, so
+        // a key never fires after the panel already said it failed.
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let flag = cancelled.clone();
         self.app
             .run_on_main_thread(move || {
                 let result = (|| {
+                    if flag.load(Ordering::SeqCst) {
+                        return Err("cancelled".to_string());
+                    }
                     let state = app.try_state::<EnigoState>().ok_or("Enigo state not initialized")?;
                     let mut enigo = state.0.lock().map_err(|e| e.to_string())?;
                     enigo.key(key, Direction::Click).map_err(|e| e.to_string())
@@ -52,7 +59,13 @@ impl MediaKeys for EnigoMediaKeys {
             })
             .map_err(|e| e.to_string())?;
         // A dropped closure (event loop shutting down) closes the channel.
-        rx.recv_timeout(Duration::from_secs(2)).map_err(|e| e.to_string())?
+        match rx.recv_timeout(Duration::from_secs(2)) {
+            Ok(result) => result,
+            Err(e) => {
+                cancelled.store(true, Ordering::SeqCst);
+                Err(e.to_string())
+            }
+        }
     }
 }
 
@@ -66,6 +79,10 @@ const OPEN_WAIT: Duration = Duration::from_secs(2);
 
 impl AppLauncher for OpenLauncher {
     fn open(&self, app: &Path) -> Result<(), String> {
+        // A relative path could be read by `open` as an option or a name: only absolute paths go on.
+        if !app.is_absolute() {
+            return Err("not an absolute path".into());
+        }
         let mut child = std::process::Command::new("/usr/bin/open")
             .arg(app)
             .stdin(Stdio::null())
@@ -113,10 +130,10 @@ impl AppCatalog for SystemCatalog {
             .iter()
             .map(PathBuf::from)
             .collect();
-        if let Some(home) = std::env::var_os("HOME") {
-            dirs.push(PathBuf::from(home).join("Applications"));
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from).filter(|h| h.is_absolute()) {
+            dirs.push(home.join("Applications"));
         }
-        let mut list = FolderScan::new(dirs).list();
+        let mut list = FsAppCatalog::new(dirs).list();
         for (name, path) in running_apps() {
             match list.iter_mut().find(|e| e.name == name) {
                 Some(e) => e.running = true,

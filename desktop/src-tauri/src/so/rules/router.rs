@@ -60,7 +60,7 @@ impl FastRouter {
         match resolve(x, &self.apps.list()) {
             Resolve::Found(app) => {
                 // Plan table: "Switching to X" for every switch (also an app that is not running yet, which
-                // is then launched: Q2 option A; test F7 expects this wording).
+                // is then launched: Q2 option A; test F3 expects this wording).
                 let verb = if switch { "Switching to" } else { "Opening" };
                 match self.launcher.open(&app.path) {
                     Ok(()) => self.done(found, stopped_at, Line::new(format!("{verb} {shown}"), Kind::Info)),

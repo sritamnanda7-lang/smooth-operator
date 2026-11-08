@@ -122,9 +122,12 @@ enum Mic {
 
 pub struct SpeechSink {
     tx: Sender<Job>,
-    /// Number of the newest talk: +1 at every `Started`. Armed/Disarmed never change it. Shared with
-    /// `Delivery` (an `Arc` is a shared pointer: both sides see the same counter).
+    /// Number of the newest talk of any kind: +1 at every `Started` and at every typed phrase. Shared
+    /// with `Delivery` (an `Arc` is a shared pointer: both sides see the same counter).
     talk: Arc<AtomicU64>,
+    /// Number of the live speech talk: set only at `Started`. Armed, Stopped and Cancelled use it, so a
+    /// typed phrase (which takes a newer `talk` number) never renumbers a speech talk in progress.
+    speech: Arc<AtomicU64>,
     clock: Arc<dyn Clock>,
     /// Only the typed-phrase input (debug builds) needs it.
     #[cfg(debug_assertions)]
@@ -220,6 +223,7 @@ impl SpeechSink {
         SpeechSink {
             tx,
             talk,
+            speech: Arc::new(AtomicU64::new(0)),
             clock,
             #[cfg(debug_assertions)]
             delivery,
@@ -248,8 +252,12 @@ const _: () = {
 impl TalkSink for SpeechSink {
     fn on_event(&self, event: TalkEvent) {
         let talk = match event {
-            TalkEvent::Started(_) => self.talk.fetch_add(1, Ordering::SeqCst) + 1,
-            _ => self.talk.load(Ordering::SeqCst),
+            TalkEvent::Started(_) => {
+                let n = self.talk.fetch_add(1, Ordering::SeqCst) + 1;
+                self.speech.store(n, Ordering::SeqCst);
+                n
+            }
+            _ => self.speech.load(Ordering::SeqCst),
         };
         let _ = self.tx.send(Job { event, talk, at: self.clock.now(), arrived: Instant::now() });
     }

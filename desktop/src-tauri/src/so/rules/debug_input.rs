@@ -12,7 +12,7 @@
 
 use super::metrics;
 use std::io::{Read, Write};
-use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
+use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, PermissionsExt};
 use std::os::unix::io::AsRawFd;
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::Path;
@@ -60,7 +60,17 @@ pub fn start(
 /// anything else sitting at that path stops the start.
 fn bind(data_dir: &Path) -> Option<UnixListener> {
     let dir = data_dir.join(SOCKET_DIR);
+    // Never follow a link at the folder: a symlink could point the socket (and the chmod) elsewhere.
+    match std::fs::symlink_metadata(&dir) {
+        Ok(meta) if meta.file_type().is_symlink() => return None,
+        _ => {}
+    }
     std::fs::DirBuilder::new().recursive(true).mode(0o700).create(&dir).ok()?;
+    let meta = std::fs::symlink_metadata(&dir).ok()?;
+    // SAFETY: geteuid has no preconditions.
+    if !meta.file_type().is_dir() || meta.uid() != unsafe { libc::geteuid() } {
+        return None;
+    }
     std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)).ok()?;
     let path = dir.join(SOCKET_NAME);
     if let Ok(meta) = std::fs::symlink_metadata(&path) {
