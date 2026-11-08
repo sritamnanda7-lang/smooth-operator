@@ -27,20 +27,47 @@ const PREVIOUS: &[&str] = &["previous", "previous track", "previous song", "last
 /// not a letter, digit or space becomes a space; spaces collapse and are trimmed; then one leading and
 /// one trailing "please" word is dropped.
 pub fn normalise(text: &str) -> String {
-    let spaced: String = text
-        .to_lowercase()
-        .replace('&', " and ")
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
-        .collect();
-    let mut words: Vec<&str> = spaced.split_whitespace().collect();
-    if words.first() == Some(&"please") {
-        words.remove(0);
+    // One pass, one allocation: it runs once per installed app when matching.
+    let mut out = String::with_capacity(text.len() + 8);
+    let mut gap = false; // a separator is waiting to be written before the next letter
+    let put = |out: &mut String, gap: &mut bool, c: char| {
+        if *gap && !out.is_empty() {
+            out.push(' ');
+        }
+        *gap = false;
+        out.push(c);
+    };
+    for c in text.chars() {
+        if c == '&' {
+            gap = true;
+            for a in "and".chars() {
+                put(&mut out, &mut gap, a);
+            }
+            gap = true;
+        } else if c.is_alphanumeric() {
+            for l in c.to_lowercase() {
+                put(&mut out, &mut gap, l);
+            }
+        } else {
+            gap = true;
+        }
     }
-    if words.last() == Some(&"please") {
-        words.pop();
+    let mut s = out.as_str();
+    if let Some(rest) = s.strip_prefix("please") {
+        if rest.is_empty() {
+            s = "";
+        } else if let Some(rest) = rest.strip_prefix(' ') {
+            s = rest;
+        }
     }
-    words.join(" ")
+    if let Some(rest) = s.strip_suffix("please") {
+        if rest.is_empty() {
+            s = "";
+        } else if let Some(rest) = rest.strip_suffix(' ') {
+            s = rest;
+        }
+    }
+    s.to_string()
 }
 
 /// The whole normalised text must equal a table row, or be `open X` / `switch to X` with X of 1 to
