@@ -249,7 +249,6 @@ path = [
   "desktop/tests/app.spec.ts",
   "desktop/tsconfig.json",
   "desktop/tsconfig.node.json",
-  "desktop/vite.config.ts",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright (c) 2025 CJ Pais"
@@ -277,7 +276,6 @@ path = [
   "LICENSE",
   "NOTICE",
   "bun.lock",
-  "desktop/src-tauri/capabilities/overlay.json",
   "desktop/src-tauri/icons/128x128.png",
   "desktop/src-tauri/icons/128x128@2x.png",
   "desktop/src-tauri/icons/32x32.png",

@@ -42,6 +42,7 @@ jobs:
         uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy
 
       - name: Rust cache
         uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
@@ -71,6 +72,9 @@ jobs:
         working-directory: desktop/src-tauri
         run: cargo test --locked
 
+      - name: Clippy gate (our code only, src/so/)
+        run: scripts/clippy-ours.sh
+
       - name: Build (unsigned, dmg)
         working-directory: desktop
         run: bun run tauri build --bundles dmg -- --locked
@@ -85,6 +89,8 @@ jobs:
 
   build-win:
     name: build-win
+    # Paused (Mac-only focus). Re-enable: repo Settings > Secrets and variables > Actions > Variables > WINDOWS_CI = true
+    if: vars.WINDOWS_CI == 'true'
     runs-on: windows-latest # x64
     timeout-minutes: 120
     steps:

@@ -1,36 +1,49 @@
 // SPDX-License-Identifier: MIT
 // Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
-// Handy's dictation flow (record, transcribe, paste) is stripped. Its paste,
-// audio-feedback and language code stays for steps 3, 4 and 6 but nothing calls
-// it yet, so dead-code warnings are silenced until step 3 wires it back in.
-#![allow(dead_code)]
 
+// Handy's dictation flow is stripped; its paste, audio-feedback, language and model code stays for
+// later steps, so these Handy modules still hold code nothing calls yet. Allowed per module, never
+// for our own `so` (static test S5). Remove each line when the step that uses the module lands.
+#[allow(dead_code)]
 mod audio_feedback;
 pub mod audio_toolkit;
 mod autostart;
 mod catalog;
+#[allow(dead_code)]
 mod chinese_script;
 pub mod cli;
+#[allow(dead_code)]
 mod clipboard;
 mod commands;
 pub mod engine_supervisor;
 mod helpers;
+#[allow(dead_code)]
 mod input;
+#[allow(dead_code)]
 mod language_detection;
 mod languages;
+#[allow(dead_code)]
 mod managers;
 mod memory;
+#[allow(dead_code)]
 mod notices;
+#[allow(dead_code)]
 mod overlay;
+#[allow(dead_code)]
 mod paste_tx;
 pub mod portable;
+#[allow(dead_code)]
 mod secure_input;
+#[allow(dead_code)]
 mod settings;
+#[allow(dead_code)]
 mod shortcut;
 mod so;
 mod system_languages;
+#[allow(dead_code)]
 mod tray;
 mod tray_i18n;
+#[allow(dead_code)]
 mod utils;
 pub mod webkit_renderer;
 
@@ -362,12 +375,13 @@ fn initialize_core_logic(app_handle: &AppHandle) {
         });
     }
 
-    // Apply the autostart preference (SMAppService login item on macOS 13+,
-    // tauri-plugin-autostart elsewhere)
-    autostart::apply_autostart(app_handle, settings.autostart_enabled);
+    // Launch at login is forced OFF on every start until step 9 (onboarding + release).
+    // This also removes any login item left over from earlier test builds.
+    // The stored `autostart_enabled` setting is ignored on purpose.
+    autostart::apply_autostart(app_handle, false);
 
-    // Create the recording overlay window (hidden by default)
-    utils::create_recording_overlay(app_handle);
+    // Create our floating panel (hidden by default). It replaces Handy's recording overlay.
+    so::setup(app_handle);
 }
 
 #[tauri::command]
@@ -378,6 +392,12 @@ fn show_main_window_command(app: AppHandle) -> Result<(), String> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// The compiled app context (config, capabilities, AppManifest). One function so the macro expands once
+/// (its embedded Info.plist symbol can only exist once per crate) and tests can build a mock app on it.
+pub(crate) fn app_context<R: tauri::Runtime>() -> tauri::Context<R> {
+    tauri::generate_context!()
+}
+
 pub fn run(cli_args: CliArgs) {
     // Avoid ggml-metal residency-set teardown assertions when a native engine
     // outlives the Tauri shutdown sequence (#1902). This must happen before
@@ -509,6 +529,10 @@ pub fn run(cli_args: CliArgs) {
             notices::get_active_notices,
             notices::dismiss_notice,
             notices::dismiss_overlay_notice,
+            so::commands::so_get_hotkey,
+            so::commands::so_set_hotkey,
+            so::commands::so_hotkey_options,
+            so::commands::so_fn_check,
         ])
         .events(collect_events![
             managers::transcription::StreamTextEvent,
@@ -630,7 +654,11 @@ pub fn run(cli_args: CliArgs) {
                     .min_inner_size(utils::MAIN_WINDOW_SIZE.0, utils::MAIN_WINDOW_SIZE.1)
                     .resizable(true)
                     .maximizable(true)
-                    .visible(false);
+                    .visible(false)
+                    // Our own origin only; no new windows (a link or window.open can never
+                    // load a web page into the window that holds our commands).
+                    .on_navigation(so::webview::main_nav_allowed)
+                    .on_new_window(|_url, _features| tauri::webview::NewWindowResponse::Deny);
 
             if let Some(data_dir) = portable::data_dir() {
                 win_builder = win_builder.data_directory(data_dir.join("webview"));
@@ -788,7 +816,7 @@ pub fn run(cli_args: CliArgs) {
             _ => {}
         })
         .invoke_handler(invoke_handler)
-        .build(tauri::generate_context!())
+        .build(app_context())
         .expect("error while building tauri application");
 
     // Must sit between build() and run(): see the doc comment.
@@ -815,6 +843,8 @@ pub fn run(cli_args: CliArgs) {
             }
             show_main_window(app);
         }
+        // Stop our key watcher thread (it never blocks quitting).
+        tauri::RunEvent::Exit => so::hotkey::shutdown(),
         // No transcription teardown on exit: transcribe.cpp runs only in the
         // worker process, which exits by itself as soon as this process's end
         // of its stdin closes, even if it is hung. Waiting on an unload here

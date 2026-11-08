@@ -1,0 +1,5 @@
+[
+  { "name": "Perplexity", "bundle_ids": ["ai.perplexity.macv3"] },
+  { "name": "Wispr Flow", "bundle_ids": ["com.electron.wispr-flow"] },
+  { "name": "Superwhisper", "bundle_ids": ["com.superduper.superwhisper", "com.superduper.superwhisper-setapp"] }
+]

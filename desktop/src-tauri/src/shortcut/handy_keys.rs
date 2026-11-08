@@ -316,7 +316,7 @@ impl HandyKeysState {
                 };
 
                 // Emit to frontend
-                if let Err(e) = app.emit("handy-keys-event", &frontend_event) {
+                if let Err(e) = app.emit_to("main", "handy-keys-event", &frontend_event) {
                     error!("Failed to emit key event: {}", e);
                 }
             } else {

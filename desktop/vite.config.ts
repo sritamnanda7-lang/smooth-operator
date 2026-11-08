@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): added our panel entry point.
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
@@ -17,12 +19,13 @@ export default defineConfig(async () => ({
     },
   },
 
-  // Multiple entry points: the main app and the overlay
+  // Multiple entry points: the main app, the overlay and our panel
   build: {
     rollupOptions: {
       input: {
         main: resolve(__dirname, "index.html"),
         overlay: resolve(__dirname, "src/overlay/index.html"),
+        panel: resolve(__dirname, "src/so/panel/index.html"),
       },
     },
   },

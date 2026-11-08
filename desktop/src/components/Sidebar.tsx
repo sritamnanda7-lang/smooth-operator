@@ -2,15 +2,11 @@
 // Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, Cpu, FlaskConical, Info, Settings } from "lucide-react";
+import { Cpu, FlaskConical, Info, Settings } from "lucide-react";
 import { Wordmark } from "@/so/Wordmark";
+import { GeneralPane } from "@/so/settings/GeneralPane";
 import { useSettings } from "../hooks/useSettings";
-import {
-  GeneralSettings,
-  AdvancedSettings,
-  AboutSettings,
-  ModelsSettings,
-} from "./settings";
+import { AboutSettings, ModelsSettings } from "./settings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
 
@@ -34,19 +30,13 @@ export const SECTIONS_CONFIG = {
   general: {
     labelKey: "sidebar.general",
     icon: Settings,
-    component: GeneralSettings,
+    component: GeneralPane,
     enabled: () => true,
   },
   models: {
     labelKey: "sidebar.models",
     icon: Cpu,
     component: ModelsSettings,
-    enabled: () => true,
-  },
-  advanced: {
-    labelKey: "sidebar.advanced",
-    icon: Cog,
-    component: AdvancedSettings,
     enabled: () => true,
   },
   debug: {

@@ -140,6 +140,10 @@ pub struct ShortcutsInitialized;
 #[specta::specta]
 #[tauri::command]
 pub fn initialize_shortcuts(app: AppHandle) -> Result<(), String> {
+    // Our key watcher. Idempotent, and placed before the check below so that a start that failed
+    // for a missing permission is retried by the next call.
+    crate::so::hotkey::start(&app, crate::so::panel::panel_out(&app));
+
     // Check if already initialized
     if app.try_state::<ShortcutsInitialized>().is_some() {
         log::debug!("Shortcuts already initialized");
