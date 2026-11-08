@@ -235,3 +235,126 @@ fn a_source_failure_warning_is_not_cleared_by_the_cancelled_talks_hide() {
     assert_eq!(order.last().map(String::as_str), Some(format!("show:{SOURCE_FAILED_TEXT}").as_str()), "{order:?}");
     assert!(!order.iter().skip_while(|o| !o.starts_with("show:Key watcher")).any(|o| o == "hide"), "{order:?}");
 }
+
+// ---------------- device-latency and single-recorder behaviour (founder M5/M6/M7 logs) ----------------
+use crate::so::hotkey::session::Mode::FreeTalk;
+use crate::so::hotkey::session::TalkEvent::Stopped;
+use crate::so::settings::HotkeyChoice as Hk;
+use crate::so::stt::{enforce_settings, RELEASE_TAIL_MS};
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// One recorder like Handy's: `start` takes `start_ms` (device open + first audio), a second `start`
+/// while recording fails ("Already recording"), `stop` takes `stop_ms` (the release tail) and returns
+/// audio only if a start completed.
+struct SingleRec {
+    state: Mutex<u8>, // 0 idle, 1 recording
+    start_ms: u64,
+    stop_ms: u64,
+    starts: AtomicUsize,
+    errors: AtomicUsize,
+}
+impl SingleRec {
+    fn new(start_ms: u64, stop_ms: u64) -> Arc<Self> {
+        Arc::new(SingleRec { state: Mutex::new(0), start_ms, stop_ms, starts: AtomicUsize::new(0), errors: AtomicUsize::new(0) })
+    }
+}
+impl Recorder for SingleRec {
+    fn start(&self) -> Result<(), String> {
+        std::thread::sleep(Duration::from_millis(self.start_ms));
+        let mut st = self.state.lock().unwrap();
+        if *st == 1 {
+            self.errors.fetch_add(1, Ordering::SeqCst);
+            return Err("Already recording".into());
+        }
+        *st = 1;
+        self.starts.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+    fn stop(&self) -> Option<Vec<f32>> {
+        std::thread::sleep(Duration::from_millis(self.stop_ms));
+        let mut st = self.state.lock().unwrap();
+        let was = *st == 1;
+        *st = 0;
+        was.then(|| vec![0.1; 4000])
+    }
+    fn cancel(&self) {
+        *self.state.lock().unwrap() = 0;
+    }
+}
+struct Counting(AtomicUsize);
+impl Transcriber for Counting {
+    fn downloaded(&self) -> ModelState {
+        ModelState::Ready
+    }
+    fn preload(&self) {}
+    fn transcribe(&self, s: Vec<f32>) -> Result<String, String> {
+        assert!(!s.is_empty());
+        self.0.fetch_add(1, Ordering::SeqCst);
+        Ok("play".into())
+    }
+}
+fn wait_for(what: &str, f: impl Fn() -> bool) {
+    let t = Instant::now();
+    while !f() {
+        assert!(t.elapsed() < Duration::from_secs(5), "timed out: {what}");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+fn sink_with(rec: Arc<SingleRec>, tr: Arc<Counting>, panel: Arc<Panel>) -> SpeechSink {
+    SpeechSink::new(rec, tr, panel, Arc::new(Clk), Arc::new(Tap), Arc::new(NoStop), Box::new(|| Hk::Fn))
+}
+
+#[test]
+fn a_press_and_release_inside_the_device_start_time_still_gets_its_audio() {
+    // Armed, Started and Stopped arrive while `start` (125 ms) is still running: stop must follow start.
+    let rec = SingleRec::new(125, 0);
+    let tr = Arc::new(Counting(AtomicUsize::new(0)));
+    let sink = sink_with(rec.clone(), tr.clone(), Arc::new(Panel::default()));
+    for e in [Armed, Started(PushToTalk), Stopped(PushToTalk)] {
+        sink.on_event(e);
+    }
+    wait_for("transcribe", || tr.0.load(Ordering::SeqCst) == 1);
+    assert_eq!(rec.errors.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn a_second_talk_right_after_the_first_gets_its_own_audio_on_the_single_recorder() {
+    // The release tail makes `stop` slow (150 ms); talk 2 is pressed at once. One recorder: talk 2's
+    // start must wait for talk 1's stop (never "Already recording") and still record.
+    let rec = SingleRec::new(125, RELEASE_TAIL_MS);
+    let tr = Arc::new(Counting(AtomicUsize::new(0)));
+    let panel = Arc::new(Panel::default());
+    let sink = sink_with(rec.clone(), tr.clone(), panel.clone());
+    for e in [Armed, Started(PushToTalk), Stopped(PushToTalk), Armed, Started(PushToTalk), Stopped(PushToTalk)] {
+        sink.on_event(e);
+    }
+    wait_for("both talks transcribed", || tr.0.load(Ordering::SeqCst) == 2);
+    assert_eq!(rec.errors.load(Ordering::SeqCst), 0);
+    assert_eq!(rec.starts.load(Ordering::SeqCst), 2);
+    assert!(panel.shown.lock().unwrap().iter().all(|(t, _)| t != MIC_FAILED_TEXT));
+}
+
+#[test]
+fn free_talk_uses_the_recorder_that_the_first_tap_started() {
+    // Double-tap = Armed (recorder starts), then Started(FreeTalk): no second start, nothing discarded.
+    let rec = SingleRec::new(125, 0);
+    let tr = Arc::new(Counting(AtomicUsize::new(0)));
+    let sink = sink_with(rec.clone(), tr.clone(), Arc::new(Panel::default()));
+    sink.on_event(Armed);
+    sink.on_event(Started(FreeTalk));
+    std::thread::sleep(Duration::from_millis(400));
+    sink.on_event(Stopped(FreeTalk));
+    wait_for("transcribe", || tr.0.load(Ordering::SeqCst) == 1);
+    assert_eq!(rec.starts.load(Ordering::SeqCst), 1, "one start for the whole free-talk");
+    assert_eq!(rec.errors.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn launch_settings_keep_a_short_tail_after_the_key_is_released() {
+    let mut s = crate::settings::get_default_settings();
+    assert!(enforce_settings(&mut s));
+    assert_eq!(s.extra_recording_buffer_ms, RELEASE_TAIL_MS);
+    assert!(!enforce_settings(&mut s));
+    s.extra_recording_buffer_ms = 0;
+    assert!(enforce_settings(&mut s));
+}

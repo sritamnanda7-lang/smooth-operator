@@ -35,6 +35,10 @@ pub const NO_SPEECH: Duration = Duration::from_secs(8);
 pub const MAX_TALK: Duration = Duration::from_secs(60);
 /// How long "Heard: ..." stays visible.
 pub const HEARD_SECS: u64 = 4;
+/// Audio kept after the key is released (Handy's `extra_recording_buffer_ms`). People release the key
+/// while still saying the last syllable; the founder's M7 logs show every talk was still in speech at
+/// release. It delays the transcription start by this much.
+pub const RELEASE_TAIL_MS: u64 = 150;
 /// Recorder binding name.
 pub const BINDING: &str = "so-talk";
 
@@ -50,7 +54,8 @@ pub fn talk_sink() -> Option<Arc<dyn TalkSink>> {
 /// right, so it is idempotent): `selected_model = model::SO_MODEL_ID`, `selected_language = "en"`,
 /// `model_unload_timeout = Min2` (Handy's idle watcher then unloads 120-130 s after last use),
 /// `always_on_microphone = false` (the mic is open only during a talk) and
-/// `lazy_stream_close = false` (it closes at once after a talk).
+/// `lazy_stream_close = false` (it closes at once after a talk) and
+/// `extra_recording_buffer_ms = RELEASE_TAIL_MS`.
 pub fn enforce_settings(settings: &mut AppSettings) -> bool {
     let mut changed = false;
     if settings.selected_model != model::SO_MODEL_ID {
@@ -63,6 +68,10 @@ pub fn enforce_settings(settings: &mut AppSettings) -> bool {
     }
     if settings.model_unload_timeout != ModelUnloadTimeout::Min2 {
         settings.model_unload_timeout = ModelUnloadTimeout::Min2;
+        changed = true;
+    }
+    if settings.extra_recording_buffer_ms != RELEASE_TAIL_MS {
+        settings.extra_recording_buffer_ms = RELEASE_TAIL_MS;
         changed = true;
     }
     if settings.always_on_microphone {
