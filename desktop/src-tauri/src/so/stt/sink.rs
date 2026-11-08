@@ -24,6 +24,7 @@ use super::silence::{End, SilenceWatch};
 use super::{HEARD_SECS, MIC_OPEN_AT, MicOpenAt};
 use crate::so::hotkey::session::{Mode, TalkEvent};
 use crate::so::hotkey::watcher::{Clock, TalkSink};
+use crate::so::rules::{PassThrough, TranscriptRouter};
 use crate::so::panel::{self, Kind, Line, PanelAction, PanelOut, PanelPayload, TaggedPanel};
 use crate::so::settings::HotkeyChoice;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -124,6 +125,9 @@ pub struct SpeechSink {
     /// Number of the newest talk: +1 at every `Started`. Armed/Disarmed never change it.
     talk: AtomicU64,
     clock: Arc<dyn Clock>,
+    /// Step 3: gets each non-blank transcript (stub: not called yet).
+    #[allow(dead_code)]
+    router: Arc<dyn TranscriptRouter>,
 }
 
 impl SpeechSink {
@@ -138,6 +142,21 @@ impl SpeechSink {
         tap: Arc<dyn SpeechTap>,
         stopper: Arc<dyn Stopper>,
         hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
+    ) -> Self {
+        Self::with_router(recorder, transcriber, panel, clock, tap, stopper, hotkey, Arc::new(PassThrough))
+    }
+
+    /// Same as `new`, with a router for transcripts (`new` plugs in `PassThrough`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_router(
+        recorder: Arc<dyn Recorder>,
+        transcriber: Arc<dyn Transcriber>,
+        panel: Arc<dyn PanelOut>,
+        clock: Arc<dyn Clock>,
+        tap: Arc<dyn SpeechTap>,
+        stopper: Arc<dyn Stopper>,
+        hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
+        router: Arc<dyn TranscriptRouter>,
     ) -> Self {
         let (tx, rx) = channel();
         let worker = Worker {
@@ -159,7 +178,21 @@ impl SpeechSink {
         let _ = std::thread::Builder::new()
             .name("so-speech".into())
             .spawn(move || worker.run());
-        SpeechSink { tx, talk: AtomicU64::new(0), clock }
+        SpeechSink { tx, talk: AtomicU64::new(0), clock, router }
+    }
+
+    /// Debug builds only: a typed phrase enters as a new talk (talk id +1, `stopped_at` = now), then
+    /// `deliver`. STUB.
+    #[cfg(debug_assertions)]
+    #[allow(dead_code)]
+    pub fn inject_transcript(&self, _text: String) {
+        todo!("step 3 increment 2")
+    }
+
+    /// After a non-blank transcript: stale check, then `router.route`, then panel lines. STUB.
+    #[allow(dead_code)]
+    fn deliver(&self, _talk: u64, _text: &str, _stopped_at: Instant) {
+        todo!("step 3 increment 1")
     }
 }
 

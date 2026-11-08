@@ -7,6 +7,7 @@ pub mod commands;
 pub mod fncheck;
 pub mod hotkey;
 pub mod panel;
+pub mod rules;
 pub mod settings;
 pub mod stt;
 pub mod webview;
