@@ -8,6 +8,7 @@ pub mod fncheck;
 pub mod hotkey;
 pub mod panel;
 pub mod settings;
+pub mod stt;
 pub mod webview;
 
 use panel::{Kind, Line, PanelPayload};
@@ -19,6 +20,7 @@ use tauri::AppHandle;
 /// when the hotkey is Fn and the read-only check finds a clash, shows one warning line for 6 s.
 pub fn setup(app: &AppHandle) {
     panel::create(app);
+    stt::setup(app);
     let hotkey = settings::load_hotkey(app, Platform::current());
     let report = fncheck::check(&*fncheck::system_env(), hotkey);
     if report.has_problem() {
@@ -31,6 +33,13 @@ pub fn setup(app: &AppHandle) {
     }
 }
 
-// Step 1 tests (written first; the stubs above make them compile and fail).
+// Handy's `download_language_detector` and `rescan_local_models` are no longer registered commands (its source stays, thin fork).
+// This reference keeps it compiled without a dead-code warning, and without a Handy file edit.
+const _: () = {
+    let _ = crate::commands::models::download_language_detector;
+    let _ = crate::commands::models::rescan_local_models;
+};
+
+// Tests (step 1, step 2): written first; stubs make them compile and fail.
 #[cfg(test)]
 mod tests;

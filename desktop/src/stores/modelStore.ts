@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import { produce } from "immer";
@@ -119,21 +121,8 @@ export const useModelStore = create<ModelsStore>()(
       }
     },
 
-    rescanLocalModels: async () => {
-      set({ isRescanning: true });
-      try {
-        const result = await commands.rescanLocalModels();
-        if (result.status !== "ok") {
-          set({ error: `Failed to rescan models: ${result.error}` });
-        }
-        // On success the backend emits `models-updated`, which reloads the list
-        // via the listener registered in initialize().
-      } catch (err) {
-        set({ error: `Failed to rescan models: ${err}` });
-      } finally {
-        set({ isRescanning: false });
-      }
-    },
+    // Smooth Operator has one fixed model: there is nothing to rescan.
+    rescanLocalModels: async () => {},
 
     selectModel: async (modelId: string) => {
       try {

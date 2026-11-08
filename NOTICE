@@ -27,11 +27,11 @@ Path to licence map
   REUSE.toml lists every file without an in-file header.
 
 Third-party material used by the app
-  Speech recognition models (downloaded by the user, not bundled):
-    OpenAI Whisper: MIT.
-    NVIDIA Parakeet TDT 0.6B v3: Creative Commons Attribution 4.0
-    (CC-BY-4.0). Attribution: "NVIDIA Parakeet TDT 0.6B v3, licensed under
-    CC-BY-4.0, https://creativecommons.org/licenses/by/4.0/".
+  Speech recognition model (downloaded by the user, not bundled):
+    NVIDIA Parakeet Unified English 0.6B (Q8_0 GGUF conversion, hosted in our
+    own Hugging Face repo smoothoperator3/parakeet-unified-en-0.6b-gguf).
+    Licensed by NVIDIA Corporation under the NVIDIA Open Model License,
+    https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/
   Inference: transcribe.cpp and ggml (MIT), Georgi Gerganov and contributors.
   Rust and JavaScript dependencies keep their own licences; cargo-deny checks
   the Rust set against an allow list (desktop/src-tauri/deny.toml).

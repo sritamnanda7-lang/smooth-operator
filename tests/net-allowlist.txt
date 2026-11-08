@@ -1,13 +1,9 @@
 # SPDX-License-Identifier: FSL-1.1-MIT
 # Hosts that may appear as http(s):// URLs in desktop/src, desktop/src-tauri/src,
 # build.rs, tauri*.json, capabilities, index.html (comment-only lines ignored).
-# Model-download hosts stay until step 2 re-hosts models. Adding a host needs
-# reviewer + founder OK. One host per line.
-blob.handy.computer
+# The only model-download host is huggingface.co (our pinned repo; the CDN redirect targets never
+# appear in source). Adding a host needs reviewer + founder OK. One host per line.
 huggingface.co
-cdn-lfs.huggingface.co
-cdn-lfs.hf.co
-cas-bridge.xethub.hf.co
 # local/dev and XML/schema namespaces (not network calls)
 localhost
 127.0.0.1

@@ -15,12 +15,9 @@ import type { ChineseScriptChoice } from "@/lib/utils/languageSuggestions";
 import { isChinese } from "@/lib/utils/languageSuggestions";
 import { Welcome } from "./screens/Welcome";
 import { Permissions } from "./screens/Permissions";
-import { Model } from "./screens/Model";
+import { SoModelStep } from "@/so/onboarding/SoModelStep";
 import { AllSet } from "@/so/AllSet";
 import { useOsType } from "@/hooks/useOsType";
-import { useOnboardingModels } from "./useOnboardingModels";
-import { useModelStore } from "@/stores/modelStore";
-import { downloadPick } from "./downloadPick";
 
 interface OnboardingFlowProps {
   /** Debug preview: inert (no prompts, downloads or setting writes). */
@@ -49,48 +46,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
   const { settings, updateSetting } = useSettings();
   const permissions = usePermissions(preview);
   const osType = useOsType();
-  const models = useOnboardingModels(store.languages);
-  const currentModel = useModelStore((s) => s.currentModel);
-  const selectModel = useModelStore((s) => s.selectModel);
-
-  // Once models load: start from an on-disk model if there is one, or flag a
-  // download interrupted by a quit. Reads the store since reset() runs first.
-  useEffect(() => {
-    if (preview || !models.offered.length) return;
-    const { downloadId } = useOnboardingStore.getState();
-    if (downloadId) {
-      const model = models.offered.find((m) => m.id === downloadId);
-      if (model && models.downloadState(model).state === "none")
-        store.set({ downloadFailed: true });
-      return;
-    }
-    const onDisk = models.offered.filter(
-      (m) => models.infoFor(m)?.is_downloaded,
-    );
-    if (!onDisk.length) return;
-    const selected = models.catalogFor(settings?.selected_model ?? "");
-    const chosen =
-      onDisk.find((m) => m.id === selected?.id) ??
-      onDisk.find((m) => models.picks.some((p) => p.model.id === m.id)) ??
-      onDisk[0];
-    store.set({ downloadId: chosen.id });
-    // Decided once the model list is in.
-  }, [models.offered.length]);
-
-  // Select the picked model as soon as it's on disk, so Try it can use it.
-  const downloaded = models.offered.find((m) => m.id === store.downloadId);
-  const downloadedInfo = downloaded && models.infoFor(downloaded);
-  useEffect(() => {
-    if (preview || !downloadedInfo?.is_downloaded) return;
-    if (currentModel !== downloadedInfo.id) selectModel(downloadedInfo.id);
-  }, [
-    preview,
-    downloadedInfo?.id,
-    downloadedInfo?.is_downloaded,
-    currentModel,
-    selectModel,
-  ]);
-
   // Before first paint so a preview never shows the saved step.
   useLayoutEffect(() => {
     store.reset(preview);
@@ -146,18 +101,6 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
     if (!preview) clearOnboardingProgress();
   };
 
-  const chooseModel = (id: string) => {
-    startModel(id);
-    onward();
-  };
-
-  const startModel = (id: string) => {
-    if (!preview) downloadPick(models, id, store.downloadId);
-    store.set({
-      modelId: id,
-      downloadId: id,
-    });
-  };
   const saveLanguages = () => {
     if (preview) return;
     const { languages, script } = useOnboardingStore.getState();
@@ -189,11 +132,11 @@ export const OnboardingFlow: React.FC<OnboardingFlowProps> = ({
       );
     case "model":
       return (
-        <Model
+        <SoModelStep
           progress={progress}
-          models={models}
+          preview={preview}
           onBack={store.returnTo ? () => go(store.returnTo!) : back}
-          onChoose={chooseModel}
+          onContinue={onward}
         />
       );
     case "done":

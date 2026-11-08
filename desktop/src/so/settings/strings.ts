@@ -24,4 +24,9 @@ export const STRINGS: Record<string, string> = {
     "The Dictation shortcut (press Globe twice) is on. Turn it off in System Settings > Keyboard > Dictation.",
   appsMessage: "Running now and may also use Fn:",
   microphoneGroup: "Microphone",
+  modelStepTitle: "Speech model",
+  modelStepBody:
+    "Smooth Operator needs one speech model (about 700 MB). You can continue while it downloads.",
+  continue: "Continue",
+  retry: "Retry",
 };

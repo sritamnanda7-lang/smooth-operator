@@ -42,6 +42,10 @@ impl Clock for FakeClock {
 struct FakeSink(Mutex<Vec<TalkEvent>>);
 impl TalkSink for FakeSink {
     fn on_event(&self, e: TalkEvent) {
+        // Step 2 added Armed/Disarmed; these step-1 tests are about talks only.
+        if matches!(e, TalkEvent::Armed | TalkEvent::Disarmed) {
+            return;
+        }
         self.0.lock().unwrap().push(e);
     }
 }

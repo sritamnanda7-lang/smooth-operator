@@ -31,6 +31,8 @@ pub enum Msg {
     SetTarget(HotkeyChoice),
     Shutdown,
     SourceFailed,
+    /// End talk number `seq` (see `Engine::force_stop`). Sent by the talk timer.
+    ForceStop(u64),
 }
 
 #[derive(Debug)]
@@ -41,7 +43,7 @@ pub trait KeySource: Send + Sync {
     fn recv(&self) -> Result<KeyEvent, SourceError>;
 }
 
-/// Step 1 = PanelSink; step 2 plugs speech-to-text here.
+/// Step 1 = PanelSink; step 2 = SpeechSink (speech-to-text).
 pub trait TalkSink: Send + Sync {
     fn on_event(&self, event: TalkEvent);
 }
@@ -61,23 +63,27 @@ pub fn run(
     clock: Arc<dyn Clock>,
 ) {
     let mut engine = Engine::new(initial);
+    panel.set_sticky(false); // a (re)started watcher: an old source-failure warning no longer applies
     loop {
         let msg = if engine.needs_tick() {
             match rx.recv_timeout(TICK) {
                 Ok(m) => Some(m),
                 Err(RecvTimeoutError::Timeout) => None,
-                Err(RecvTimeoutError::Disconnected) => return,
+                Err(RecvTimeoutError::Disconnected) => return end_all(&mut engine, &sink),
             }
         } else {
             match rx.recv() {
                 Ok(m) => Some(m),
-                Err(_) => return,
+                Err(_) => return end_all(&mut engine, &sink),
             }
         };
         let events = match msg {
             Some(Msg::Key(ev)) => engine.feed(&ev, clock.now()),
             Some(Msg::SetTarget(choice)) => engine.set_target(choice).into_iter().collect(),
             Some(Msg::SourceFailed) => {
+                // The warning must win over the talk's own (late) hide or text.
+                panel.set_sticky(true);
+                end_all(&mut engine, &sink);
                 panel.show(PanelPayload::new(vec![Line::new(
                     SOURCE_FAILED_TEXT,
                     Kind::Warn,
@@ -85,12 +91,20 @@ pub fn run(
                 // The key source is gone: nothing more can arrive. Returning lets `start` retry.
                 return;
             }
-            Some(Msg::Shutdown) => return,
+            Some(Msg::ForceStop(seq)) => engine.force_stop(seq),
+            Some(Msg::Shutdown) => return end_all(&mut engine, &sink),
             None => engine.tick(clock.now()),
         };
         for e in events {
             sink.on_event(e);
         }
+    }
+}
+
+/// The loop is ending: tell the sink to drop any running talk (closes the microphone, stops timers).
+fn end_all(engine: &mut Engine, sink: &Arc<dyn TalkSink>) {
+    if let Some(e) = engine.reset() {
+        sink.on_event(e);
     }
 }
 

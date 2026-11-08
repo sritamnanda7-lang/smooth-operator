@@ -19,15 +19,36 @@ fn keyev(flags: Modifiers, key: Key, down: bool) -> KeyEvent {
     KeyEvent { modifiers: flags, key: Some(key), is_key_down: down, changed_modifier: None }
 }
 
+/// Step 2 added `Armed`/`Disarmed` events. The step-1 tests are about talks only, so this wrapper
+/// drops those two; step-2 tests for them are in `stt_tests.rs`. (`needs_tick` passes through.)
+struct Core(Engine);
+fn talk_only(v: Vec<TalkEvent>) -> Vec<TalkEvent> {
+    v.into_iter().filter(|e| !matches!(e, TalkEvent::Armed | TalkEvent::Disarmed)).collect()
+}
+impl Core {
+    fn feed(&mut self, ev: &KeyEvent, now: Instant) -> Vec<TalkEvent> {
+        talk_only(self.0.feed(ev, now))
+    }
+    fn tick(&mut self, now: Instant) -> Vec<TalkEvent> {
+        talk_only(self.0.tick(now))
+    }
+    fn needs_tick(&self) -> bool {
+        self.0.needs_tick()
+    }
+    fn set_target(&mut self, t: HotkeyChoice) -> Option<TalkEvent> {
+        talk_only(self.0.set_target(t).into_iter().collect()).into_iter().next()
+    }
+}
+
 /// Engine + a base instant, so tests read in milliseconds.
 struct Rig {
-    e: Engine,
+    e: Core,
     t0: Instant,
     target: Modifiers,
 }
 impl Rig {
     fn new(choice: HotkeyChoice) -> Self {
-        Rig { e: Engine::new(choice), t0: Instant::now(), target: choice.modifier() }
+        Rig { e: Core(Engine::new(choice)), t0: Instant::now(), target: choice.modifier() }
     }
     fn at(&self, ms: u64) -> Instant {
         self.t0 + Duration::from_millis(ms)
@@ -89,8 +110,10 @@ fn t02_lone_tap_does_nothing() {
     let mut r = Rig::new(HotkeyChoice::Fn);
     assert!(r.down(0).is_empty());
     assert!(r.up(120).is_empty());
-    assert!(!r.e.needs_tick());
+    // Step 2 (T20): a lone tap keeps ticking until its 400 ms double-tap window expires.
+    assert!(r.e.needs_tick());
     assert!(r.tick(1000).is_empty());
+    assert!(!r.e.needs_tick());
 }
 
 #[test]
@@ -383,6 +406,9 @@ fn t29_flags_show_target_up_while_we_think_down_is_a_release() {
     // The Fn-up event was lost. The next event (A key-up) carries flags without Fn.
     let out = d.feed(&keyev(NONE, Key::A, false), t0 + Duration::from_millis(100));
     assert_eq!(out, vec![DetOut::Release { clean: true }]);
+    // Step 2 (T20): a short clean release is a tap; it ticks until the double-tap window expires.
+    assert!(d.needs_tick());
+    assert_eq!(d.tick(t0 + Duration::from_millis(600)), vec![DetOut::TapExpired]);
     assert!(!d.needs_tick());
 }
 

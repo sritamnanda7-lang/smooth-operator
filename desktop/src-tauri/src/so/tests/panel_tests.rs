@@ -87,6 +87,7 @@ fn one(a: PanelAction) -> (PanelPayload, Option<Duration>) {
         PanelAction::Show(p) => (p, None),
         PanelAction::ShowThenHide(p, d) => (p, Some(d)),
         PanelAction::Hide => panic!("expected text, got Hide"),
+        PanelAction::Ignore => panic!("expected text, got Ignore"),
     }
 }
 

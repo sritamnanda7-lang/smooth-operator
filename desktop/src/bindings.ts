@@ -547,19 +547,6 @@ async downloadModel(modelId: string) : Promise<Result<null, string>> {
 }
 },
 /**
- * Download the language detector on its own. Progress, completion,
- * cancellation and failure use the model download events under
- * `LANGUAGE_DETECTOR_ID`.
- */
-async downloadLanguageDetector() : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("download_language_detector") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
  * Whether the language detector is on disk.
  */
 async isLanguageDetectorDownloaded() : Promise<boolean> {
@@ -619,18 +606,6 @@ async getTranscriptionModelStatus() : Promise<Result<string | null, string>> {
 async isModelLoading() : Promise<Result<boolean, string>> {
     try {
     return { status: "ok", data: await TAURI_INVOKE("is_model_loading") };
-} catch (e) {
-    if(e instanceof Error) throw e;
-    else return { status: "error", error: e  as any };
-}
-},
-/**
- * Re-scan local sources (custom models dir + shared HF cache) for models added
- * since launch
- */
-async rescanLocalModels() : Promise<Result<null, string>> {
-    try {
-    return { status: "ok", data: await TAURI_INVOKE("rescan_local_models") };
 } catch (e) {
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
@@ -1064,7 +1039,7 @@ export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null
  */
 export type ModelSource = 
 /**
- * Direct HTTP download from a URL (current blob.handy.computer hosting).
+ * Direct HTTP download from a URL.
  */
 { Url: { url: string; 
 /**
