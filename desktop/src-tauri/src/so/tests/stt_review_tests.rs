@@ -358,3 +358,55 @@ fn launch_settings_keep_a_short_tail_after_the_key_is_released() {
     s.extra_recording_buffer_ms = 0;
     assert!(enforce_settings(&mut s));
 }
+
+// ---------------- "Listening" cue only once the microphone delivers audio ----------------
+fn texts(p: &Panel) -> Vec<String> {
+    p.shown.lock().unwrap().iter().map(|(t, _)| t.clone()).collect()
+}
+
+#[test]
+fn the_listening_cue_appears_only_after_the_first_audio() {
+    let rec = SingleRec::new(400, 0); // slow cold open
+    let panel = Arc::new(Panel::default());
+    let sink = sink_with(rec, Arc::new(Counting(AtomicUsize::new(0))), panel.clone());
+    sink.on_event(Armed);
+    sink.on_event(Started(PushToTalk));
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(texts(&panel).is_empty(), "no cue before the mic is ready: {:?}", texts(&panel));
+    wait_for("cue", || texts(&panel) == vec!["Listening".to_string()]);
+}
+
+#[test]
+fn a_talk_that_ends_before_the_mic_is_ready_shows_no_listening_cue() {
+    for end in [Cancelled(PushToTalk), Stopped(PushToTalk)] {
+        let rec = SingleRec::new(300, 0);
+        let panel = Arc::new(Panel::default());
+        let tr = Arc::new(Counting(AtomicUsize::new(0)));
+        let sink = sink_with(rec, tr.clone(), panel.clone());
+        sink.on_event(Armed);
+        sink.on_event(Started(PushToTalk));
+        std::thread::sleep(Duration::from_millis(100)); // the end arrives while `start` still runs
+        sink.on_event(end);
+        std::thread::sleep(Duration::from_millis(700));
+        assert!(!texts(&panel).iter().any(|t| t == "Listening"), "{end:?}: {:?}", texts(&panel));
+        if matches!(end, Stopped(_)) {
+            assert_eq!(tr.0.load(Ordering::SeqCst), 1, "a released talk is still transcribed");
+        }
+    }
+}
+
+#[test]
+fn the_newest_talk_still_owns_the_panel_with_the_cue_rule() {
+    // Talk 1 ends before ready (no cue); talk 2 shows its own cue and keeps it.
+    let rec = SingleRec::new(250, 0);
+    let panel = Arc::new(Panel::default());
+    let sink = sink_with(rec, Arc::new(Counting(AtomicUsize::new(0))), panel.clone());
+    for e in [Armed, Started(PushToTalk), Stopped(PushToTalk)] {
+        sink.on_event(e);
+    }
+    std::thread::sleep(Duration::from_millis(400));
+    sink.on_event(Armed);
+    sink.on_event(Started(PushToTalk));
+    wait_for("talk 2 cue", || texts(&panel).iter().any(|t| t == "Listening"));
+    assert_eq!(texts(&panel).iter().filter(|t| *t == "Listening").count(), 1);
+}

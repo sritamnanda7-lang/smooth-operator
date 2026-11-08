@@ -28,6 +28,7 @@ use crate::so::panel::{self, Kind, Line, PanelAction, PanelOut, PanelPayload, Ta
 use crate::so::settings::HotkeyChoice;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -102,7 +103,13 @@ struct Job {
     event: TalkEvent,
     talk: u64,
     at: Instant,
+    /// Real time the event reached the sink (`at` comes from the injected clock).
+    arrived: Instant,
 }
+
+/// The "Listening" cue is dropped if the talk ended this long before the microphone was ready: it
+/// would flash up for a talk that is already over. (Jitter between events is far smaller.)
+const STALE_CUE_GRACE: Duration = Duration::from_millis(20);
 
 /// What the microphone is doing, as the worker knows it.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -142,13 +149,16 @@ impl SpeechSink {
             stopper,
             hotkey,
             mic: Mic::Closed,
+            ready_at: None,
             blocked: false,
             timer: None,
+            rx,
+            pending: VecDeque::new(),
         };
         // If the thread cannot start, events pile up unread: speech is off, the rest still works.
         let _ = std::thread::Builder::new()
             .name("so-speech".into())
-            .spawn(move || worker.run(rx));
+            .spawn(move || worker.run());
         SpeechSink { tx, talk: AtomicU64::new(0), clock }
     }
 }
@@ -159,7 +169,7 @@ impl TalkSink for SpeechSink {
             TalkEvent::Started(_) => self.talk.fetch_add(1, Ordering::SeqCst) + 1,
             _ => self.talk.load(Ordering::SeqCst),
         };
-        let _ = self.tx.send(Job { event, talk, at: self.clock.now() });
+        let _ = self.tx.send(Job { event, talk, at: self.clock.now(), arrived: Instant::now() });
     }
 }
 
@@ -172,6 +182,11 @@ struct Worker {
     stopper: Arc<dyn Stopper>,
     hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
     mic: Mic,
+    /// When the microphone last delivered its first audio (`start` returned).
+    ready_at: Option<Instant>,
+    rx: Receiver<Job>,
+    /// Events read ahead of time (to see whether a talk already ended).
+    pending: VecDeque<Job>,
     /// The current talk could not start (no model, no mic): its Stopped does nothing.
     blocked: bool,
     /// Cancel flag of the running talk's timer thread.
@@ -180,14 +195,38 @@ struct Worker {
 
 impl Worker {
     /// Blocks on `recv()` while idle, so it costs no CPU.
-    fn run(mut self, rx: Receiver<Job>) {
-        while let Ok(job) = rx.recv() {
+    fn run(mut self) {
+        loop {
+            let job = match self.pending.pop_front() {
+                Some(job) => job,
+                None => match self.rx.recv() {
+                    Ok(job) => job,
+                    Err(_) => break,
+                },
+            };
             self.handle(job);
         }
     }
 
+    fn drain(&mut self) {
+        while let Ok(job) = self.rx.try_recv() {
+            self.pending.push_back(job);
+        }
+    }
+
+    /// True if this talk's end (Stopped/Cancelled) reached us clearly before the microphone was ready.
+    fn ended_before_ready(&mut self, talk: u64) -> bool {
+        self.drain();
+        let Some(ready) = self.ready_at else { return false };
+        self.pending.iter().any(|j| {
+            j.talk == talk
+                && matches!(j.event, TalkEvent::Stopped(_) | TalkEvent::Cancelled(_))
+                && ready.saturating_duration_since(j.arrived) > STALE_CUE_GRACE
+        })
+    }
+
     fn handle(&mut self, job: Job) {
-        let Job { event, talk, at } = job;
+        let Job { event, talk, at, .. } = job;
         match event {
             TalkEvent::Armed => self.armed(),
             TalkEvent::Disarmed => self.drop_mic(),
@@ -215,6 +254,7 @@ impl Worker {
             self.rec.cancel();
         }
         self.mic = if self.rec.start().is_ok() { Mic::Open } else { Mic::Failed };
+        self.ready_at = (self.mic == Mic::Open).then(Instant::now);
     }
 
     /// Cancel the recorder (drops the samples) if it was started.
@@ -263,6 +303,11 @@ impl Worker {
             self.drop_mic();
             self.blocked = true;
             self.panel.show(talk, one_line(text, Kind::Warn));
+            return;
+        }
+        // The cue ("Listening") appears only now, when the microphone is delivering audio (`start`
+        // returned), never earlier. If the talk already ended before that, no cue at all.
+        if self.ended_before_ready(talk) {
             return;
         }
         let hotkey = (self.hotkey)();
