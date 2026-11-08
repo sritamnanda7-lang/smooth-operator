@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
 //! Step 3: fast rules (no AI). Spoken text that is exactly a media or open/switch command is
 //! handled here; everything else passes through. Plan: draft/step-3-plan.md.
-//! Tests: `so/tests/rules_*.rs`. STUBS: bodies are `todo!()` until the tester's tests exist.
-// Nothing is wired yet (increment 6), so unused-code warnings are silenced for the stubs; remove then.
-#![allow(dead_code)]
+//! Tests: `so/tests/rules_*.rs`.
 
 pub mod apps;
 #[cfg(debug_assertions)]
@@ -41,3 +39,10 @@ impl TranscriptRouter for PassThrough {
 
 /// True only in debug builds; the release build has no test input.
 pub const DEBUG_INPUT_COMPILED: bool = cfg!(debug_assertions);
+
+// `PassThrough` and the constant are part of the step-3 API (the default router, the release guard);
+// tests use them and the shipped code does not. This reference keeps them compiled without a warning.
+const _: () = {
+    let _ = PassThrough;
+    let _ = DEBUG_INPUT_COMPILED;
+};

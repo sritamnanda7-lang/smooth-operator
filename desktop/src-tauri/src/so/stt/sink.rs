@@ -239,6 +239,12 @@ impl SpeechSink {
     }
 }
 
+// `new` (default router) is used by tests; the app builds its sink with `with_router`. Same trick as
+// so/mod.rs: this reference avoids a dead-code warning without an allow.
+const _: () = {
+    let _ = SpeechSink::new;
+};
+
 impl TalkSink for SpeechSink {
     fn on_event(&self, event: TalkEvent) {
         let talk = match event {

@@ -13,6 +13,7 @@ use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{get_settings, write_settings, AppSettings, ModelUnloadTimeout};
 use crate::so::hotkey::watcher::TalkSink;
+use crate::so::rules::TranscriptRouter;
 use crate::so::settings::{self as so_settings, Platform};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -104,7 +105,7 @@ pub fn setup(app: &AppHandle) {
     // live manager to on-demand so the mic is open only during a talk.
     real::MicModeSwitch::force_on_demand(&**rec.inner());
     let app_for_hotkey = app.clone();
-    let sink = sink::SpeechSink::new(
+    let sink = Arc::new(sink::SpeechSink::with_router(
         Arc::new(real::RealRecorder::new(rec.inner().clone())),
         Arc::new(real::RealTranscriber::new(tr.inner().clone(), models.inner().clone())),
         crate::so::panel::panel_out(app),
@@ -112,8 +113,40 @@ pub fn setup(app: &AppHandle) {
         Arc::new(tap::StaticTap),
         Arc::new(real::WatcherStopper),
         Box::new(move || so_settings::load_hotkey(&app_for_hotkey, Platform::current())),
-    );
-    let _ = SINK.set(Arc::new(sink));
+        fast_router(app),
+    ));
+    #[cfg(debug_assertions)]
+    start_debug_input(app, &sink);
+    let _ = SINK.set(sink);
+}
+
+/// The router that handles exact media and open/switch phrases (step 3). Other platforms keep step 2's
+/// pass-through until their own effects exist.
+#[cfg(target_os = "macos")]
+fn fast_router(app: &AppHandle) -> Arc<dyn TranscriptRouter> {
+    use crate::so::rules::{real, router::FastRouter};
+    Arc::new(FastRouter::new(
+        Arc::new(real::EnigoMediaKeys::new(app.clone())),
+        Arc::new(real::SystemCatalog),
+        Arc::new(real::OpenLauncher),
+        Arc::new(crate::so::hotkey::SystemClock),
+    ))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn fast_router(_app: &AppHandle) -> Arc<dyn TranscriptRouter> {
+    Arc::new(crate::so::rules::PassThrough)
+}
+
+/// Debug builds only, and only when launched with `SO_DEBUG_INPUT=1` (read once, here): opens the
+/// typed-phrase socket in the app data folder.
+#[cfg(debug_assertions)]
+fn start_debug_input(app: &AppHandle, sink: &Arc<sink::SpeechSink>) {
+    let enabled = std::env::var(crate::so::rules::debug_input::ENV_FLAG).is_ok_and(|v| v == "1");
+    let Ok(dir) = app.path().app_data_dir() else { return };
+    let sink = sink.clone();
+    let inject = Arc::new(move |text: String| sink.inject_transcript(text));
+    let _ = crate::so::rules::debug_input::start(&dir, enabled, inject);
 }
 
 /// Benchmark scoring only (the `#[ignore]` bench and its tests); not part of the shipped app.
