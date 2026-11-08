@@ -8,10 +8,8 @@
 //! The URL pins a repo COMMIT, not `main`, so the bytes can never change under us; the SHA-256 is
 //! checked by Handy's download path (it deletes the file on a mismatch).
 use crate::managers::model::{ModelInfo, ModelSource};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
 use std::path::Path;
 
 pub const SO_MODEL_ID: &str = "so/parakeet-unified-en-0.6b-q8";
@@ -70,8 +68,10 @@ impl ModelSpec {
         }
     }
 
+    /// Test-only (T23): in the app, Handy's download path does this same check and deletes a bad file.
     /// SHA-256 of the file at `path` must equal `self.sha256`. On mismatch (or a read error) the file
     /// is deleted and `Err` returned; on a match `Ok`. A missing file is an `Err` (nothing to delete).
+    #[cfg(test)]
     pub fn verify_file(&self, path: &Path) -> Result<(), String> {
         let hash = file_sha256(path);
         match hash {
@@ -87,7 +87,10 @@ impl ModelSpec {
     }
 }
 
+#[cfg(test)]
 fn file_sha256(path: &Path) -> std::io::Result<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
     let mut file = fs::File::open(path)?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 1024 * 1024];

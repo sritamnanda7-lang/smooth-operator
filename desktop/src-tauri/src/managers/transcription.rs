@@ -180,6 +180,7 @@ impl StreamRouter {
     /// Forward a 16 kHz frame to the active streaming worker. Cheap no-op (a
     /// single relaxed atomic load) when no stream is pending.
     pub fn feed(&self, frame: &[f32]) {
+        crate::so::stt::tap::speech_frame(); // Smooth Operator: "speech heard now" (silence end)
         if !self.open.load(Ordering::Relaxed) {
             return;
         }
@@ -1028,11 +1029,6 @@ impl TranscriptionManager {
 
         if final_result.is_empty() {
             info!("Transcription result is empty");
-        } else {
-            info!(
-                "Transcription result: {}",
-                crate::utils::redact_text(&final_result)
-            );
         }
 
         self.maybe_unload_immediately("transcription");

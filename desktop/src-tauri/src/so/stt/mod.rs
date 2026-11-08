@@ -7,7 +7,6 @@ pub mod real;
 pub mod silence;
 pub mod sink;
 pub mod tap;
-pub mod wer;
 
 use crate::managers::audio::AudioRecordingManager;
 use crate::managers::model::ModelManager;
@@ -104,3 +103,7 @@ pub fn setup(app: &AppHandle) {
     );
     let _ = SINK.set(Arc::new(sink));
 }
+
+/// Benchmark scoring only (the `#[ignore]` bench and its tests); not part of the shipped app.
+#[cfg(test)]
+pub mod wer;

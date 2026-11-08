@@ -73,7 +73,6 @@ const APP_COMMANDS: CommandNames = &[
     "get_available_models",
     "get_model_info",
     "download_model",
-    "download_language_detector",
     "is_language_detector_downloaded",
     "delete_model",
     "get_retired_models",
