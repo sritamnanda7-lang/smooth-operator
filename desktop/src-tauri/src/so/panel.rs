@@ -86,6 +86,12 @@ impl PanelPayload {
 pub trait PanelOut: Send + Sync {
     fn show(&self, payload: PanelPayload);
     fn hide(&self);
+    /// A sticky warning (the key watcher died) is on screen: `TaggedPanel` drops every later write
+    /// from a talk, so a stale hide or "Heard" cannot clear it. Default: never sticky.
+    fn set_sticky(&self, _on: bool) {}
+    fn sticky(&self) -> bool {
+        false
+    }
 }
 
 /// What the panel does for a talk event.
@@ -194,7 +200,7 @@ impl TaggedPanel {
 
     pub fn show(&self, talk_id: u64, payload: PanelPayload) {
         let mut newest = self.newest.lock().unwrap_or_else(|e| e.into_inner());
-        if talk_id < *newest {
+        if talk_id < *newest || self.panel.sticky() {
             return;
         }
         *newest = talk_id;
@@ -203,7 +209,7 @@ impl TaggedPanel {
 
     pub fn hide(&self, talk_id: u64) {
         let mut newest = self.newest.lock().unwrap_or_else(|e| e.into_inner());
-        if talk_id < *newest {
+        if talk_id < *newest || self.panel.sticky() {
             return;
         }
         *newest = talk_id;
@@ -376,7 +382,7 @@ pub fn create(app: &AppHandle) {
     if let Some(win) = app.get_webview_window(LABEL) {
         let _ = win.set_ignore_cursor_events(true);
     }
-    app.manage(PanelHandle(Arc::new(TauriPanel { app: app.clone() })));
+    app.manage(PanelHandle(Arc::new(TauriPanel { app: app.clone(), sticky: std::sync::atomic::AtomicBool::new(false) })));
 }
 
 /// Managed app state holding the real panel (so commands and start-up code can reach it).
@@ -389,9 +395,18 @@ pub fn panel_out(app: &AppHandle) -> Arc<dyn PanelOut> {
 
 struct TauriPanel {
     app: AppHandle,
+    sticky: std::sync::atomic::AtomicBool,
 }
 
 impl PanelOut for TauriPanel {
+    fn set_sticky(&self, on: bool) {
+        self.sticky.store(on, Ordering::SeqCst);
+    }
+
+    fn sticky(&self) -> bool {
+        self.sticky.load(Ordering::SeqCst)
+    }
+
     fn show(&self, payload: PanelPayload) {
         set_last(Some(payload.clone()));
         let app = self.app.clone();

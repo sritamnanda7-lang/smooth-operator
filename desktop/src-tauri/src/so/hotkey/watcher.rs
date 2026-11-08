@@ -63,6 +63,7 @@ pub fn run(
     clock: Arc<dyn Clock>,
 ) {
     let mut engine = Engine::new(initial);
+    panel.set_sticky(false); // a (re)started watcher: an old source-failure warning no longer applies
     loop {
         let msg = if engine.needs_tick() {
             match rx.recv_timeout(TICK) {
@@ -80,6 +81,8 @@ pub fn run(
             Some(Msg::Key(ev)) => engine.feed(&ev, clock.now()),
             Some(Msg::SetTarget(choice)) => engine.set_target(choice).into_iter().collect(),
             Some(Msg::SourceFailed) => {
+                // The warning must win over the talk's own (late) hide or text.
+                panel.set_sticky(true);
                 end_all(&mut engine, &sink);
                 panel.show(PanelPayload::new(vec![Line::new(
                     SOURCE_FAILED_TEXT,

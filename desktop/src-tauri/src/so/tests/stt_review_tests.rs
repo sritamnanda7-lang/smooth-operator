@@ -81,12 +81,28 @@ impl Clock for Clk {
     }
 }
 #[derive(Default)]
-struct Panel(Mutex<Vec<(String, Kind)>>);
+struct Panel {
+    shown: Mutex<Vec<(String, Kind)>>,
+    hides: Mutex<usize>,
+    sticky: std::sync::atomic::AtomicBool,
+    /// Order of writes: "show:<text>" / "hide".
+    order: Mutex<Vec<String>>,
+}
 impl PanelOut for Panel {
     fn show(&self, p: PanelPayload) {
-        self.0.lock().unwrap().push((p.lines[0].text.clone(), p.lines[0].kind));
+        self.shown.lock().unwrap().push((p.lines[0].text.clone(), p.lines[0].kind));
+        self.order.lock().unwrap().push(format!("show:{}", p.lines[0].text));
     }
-    fn hide(&self) {}
+    fn hide(&self) {
+        *self.hides.lock().unwrap() += 1;
+        self.order.lock().unwrap().push("hide".into());
+    }
+    fn set_sticky(&self, on: bool) {
+        self.sticky.store(on, std::sync::atomic::Ordering::SeqCst);
+    }
+    fn sticky(&self) -> bool {
+        self.sticky.load(std::sync::atomic::Ordering::SeqCst)
+    }
 }
 
 #[test]
@@ -99,7 +115,7 @@ fn s1_a_mic_that_never_yields_audio_warns_and_the_worker_keeps_going() {
     sink.on_event(Armed);
     sink.on_event(Started(PushToTalk));
     let start = Instant::now();
-    while !panel.0.lock().unwrap().iter().any(|(t, k)| t == MIC_FAILED_TEXT && *k == Kind::Warn) {
+    while !panel.shown.lock().unwrap().iter().any(|(t, k)| t == MIC_FAILED_TEXT && *k == Kind::Warn) {
         assert!(start.elapsed() < Duration::from_secs(5), "no mic warning");
         std::thread::sleep(Duration::from_millis(20));
     }
@@ -194,4 +210,28 @@ fn s3_engine_goes_back_to_disarmed_when_the_tap_is_forgotten() {
     assert_eq!(e.feed(&modev(FN, true, FN), ms(0)), vec![Armed]);
     assert!(e.feed(&modev(NONE, false, FN), ms(80)).is_empty());
     assert_eq!(e.feed(&modev(FN | Modifiers::SHIFT_LEFT, true, FN), ms(200)), vec![Disarmed]);
+}
+
+// ---------------- source-failure warning wins over a stale talk hide ----------------
+#[test]
+fn a_source_failure_warning_is_not_cleared_by_the_cancelled_talks_hide() {
+    use crate::so::hotkey::watcher::SOURCE_FAILED_TEXT;
+    let log = Arc::new(Log(Mutex::new(vec![])));
+    let rec = Arc::new(NeverReadyRec { log, hold: Mutex::new(None) });
+    let panel = Arc::new(Panel::default());
+    let clock = Arc::new(Fake(Mutex::new(0)));
+    let sink: Arc<dyn TalkSink> = Arc::new(SpeechSink::new(rec, Arc::new(Tr), panel.clone(), clock.clone(), Arc::new(Tap), Arc::new(NoStop), Box::new(|| HotkeyChoice::Fn)));
+    let (tx, rx): (Sender<Msg>, _) = channel();
+    let (s, c, p) = (sink, clock.clone(), panel.clone());
+    let h = std::thread::spawn(move || run(rx, HotkeyChoice::Fn, s, p, c));
+    tx.send(Msg::Key(modev(FN, true, FN))).unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    *clock.0.lock().unwrap() = 400;
+    std::thread::sleep(Duration::from_millis(500)); // Started shown (the fake mic gives up after 200 ms)
+    tx.send(Msg::SourceFailed).unwrap();
+    h.join().unwrap();
+    std::thread::sleep(Duration::from_millis(500)); // the sink's Cancelled hide arrives late
+    let order = panel.order.lock().unwrap().clone();
+    assert_eq!(order.last().map(String::as_str), Some(format!("show:{SOURCE_FAILED_TEXT}").as_str()), "{order:?}");
+    assert!(!order.iter().skip_while(|o| !o.starts_with("show:Key watcher")).any(|o| o == "hide"), "{order:?}");
 }
