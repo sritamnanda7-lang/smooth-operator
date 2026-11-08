@@ -392,6 +392,12 @@ fn show_main_window_command(app: AppHandle) -> Result<(), String> {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
+/// The compiled app context (config, capabilities, AppManifest). One function so the macro expands once
+/// (its embedded Info.plist symbol can only exist once per crate) and tests can build a mock app on it.
+pub(crate) fn app_context<R: tauri::Runtime>() -> tauri::Context<R> {
+    tauri::generate_context!()
+}
+
 pub fn run(cli_args: CliArgs) {
     // Avoid ggml-metal residency-set teardown assertions when a native engine
     // outlives the Tauri shutdown sequence (#1902). This must happen before
@@ -810,7 +816,7 @@ pub fn run(cli_args: CliArgs) {
             _ => {}
         })
         .invoke_handler(invoke_handler)
-        .build(tauri::generate_context!())
+        .build(app_context())
         .expect("error while building tauri application");
 
     // Must sit between build() and run(): see the doc comment.
