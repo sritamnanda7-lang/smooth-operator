@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT
+// Modified from Handy v0.10.0 (Copyright (c) 2025 CJ Pais): see git history for changes.
 //! The bundled, offline model catalog.
 //!
 //! `catalog.json` is a verbatim copy of the `@handy-computer/models` package's
