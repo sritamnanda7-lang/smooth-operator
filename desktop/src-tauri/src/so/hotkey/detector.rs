@@ -163,12 +163,12 @@ impl Detector {
                             out.push(DetOut::DoubleTap);
                         }
                     } else {
-                        self.last_tap = None;
+                        self.forget_pending_tap(&mut out);
                         self.phase = Phase::Ignored;
                     }
                 } else if down_now && ev.key.is_none() {
                     // Target shows as down but we never saw it go down.
-                    self.last_tap = None;
+                    self.forget_pending_tap(&mut out);
                     self.phase = Phase::Ignored;
                 } else if self.is_other_down(ev) && self.last_tap.is_some() {
                     // Something else was pressed between the two taps: no double-tap.
@@ -178,6 +178,14 @@ impl Detector {
             }
         }
         out
+    }
+
+    /// Drop a pending tap and say so (`TapExpired`), so the session never waits for a 2nd tap that
+    /// can no longer come (it would stay armed with the microphone open).
+    fn forget_pending_tap(&mut self, out: &mut Vec<DetOut>) {
+        if self.last_tap.take().is_some() {
+            out.push(DetOut::TapExpired);
+        }
     }
 
     /// Call while `needs_tick()` so a hold is noticed while the key is still down.

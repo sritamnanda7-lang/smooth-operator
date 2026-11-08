@@ -6,12 +6,38 @@ use super::metrics;
 use super::sink::{ModelState, Recorder, Stopper, Transcriber};
 use super::{model, BINDING};
 use crate::audio_toolkit::VadPolicy;
-use crate::managers::audio::AudioRecordingManager;
+use crate::managers::audio::{AudioRecordingManager, MicrophoneMode};
 use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::mpsc;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+
+/// How long the speech worker waits for the first audio chunk before treating the microphone as failed.
+pub const READY_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Run `wait` (a call that may block for ever) on a helper thread and give it `timeout`. False if it
+/// answered false or did not answer in time. The helper ends by itself when the call returns.
+pub fn wait_ready(wait: impl FnOnce() -> bool + Send + 'static, timeout: Duration) -> bool {
+    let (tx, rx) = mpsc::channel();
+    let spawned = std::thread::Builder::new().name("so-mic-ready".into()).spawn(move || {
+        let _ = tx.send(wait());
+    });
+    spawned.is_ok() && rx.recv_timeout(timeout).unwrap_or(false)
+}
+
+/// Switches the microphone to open-only-during-a-talk, live (Handy picks the mode once, at
+/// construction, before our setup runs).
+pub trait MicModeSwitch {
+    fn force_on_demand(&self);
+}
+
+impl MicModeSwitch for AudioRecordingManager {
+    fn force_on_demand(&self) {
+        let _ = self.update_mode(MicrophoneMode::OnDemand);
+    }
+}
 
 pub struct RealRecorder {
     rec: Arc<AudioRecordingManager>,
@@ -31,11 +57,18 @@ impl Recorder for RealRecorder {
         match self.rec.try_start_recording(BINDING, VadPolicy::Offline) {
             Ok(readiness) => {
                 self.cancel_gen.store(self.rec.cancel_generation(), Ordering::SeqCst);
-                // Wait for the first audio chunk: from here on nothing said is lost. This runs on the
-                // speech worker, never on the key watcher.
-                let got_audio = readiness.wait();
+                // Wait (at most READY_TIMEOUT) for the first audio chunk: from here on nothing said is
+                // lost. This runs on the speech worker, never on the key watcher. No audio in time =
+                // the microphone failed: close it and say so. (Cancelling drops Handy's sink, which
+                // also ends the helper thread's wait.)
+                let got_audio = wait_ready(move || readiness.wait(), READY_TIMEOUT);
                 metrics::mic_ready(started.elapsed().as_millis() as u64, got_audio);
-                Ok(())
+                if got_audio {
+                    Ok(())
+                } else {
+                    self.rec.cancel_recording();
+                    Err("no audio from the microphone".to_string())
+                }
             }
             Err(e) => Err(e.to_string()),
         }

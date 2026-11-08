@@ -33,10 +33,11 @@ pub fn setup(app: &AppHandle) {
     }
 }
 
-// Handy's `download_language_detector` is no longer a registered command (its source stays, thin fork).
+// Handy's `download_language_detector` and `rescan_local_models` are no longer registered commands (its source stays, thin fork).
 // This reference keeps it compiled without a dead-code warning, and without a Handy file edit.
 const _: () = {
     let _ = crate::commands::models::download_language_detector;
+    let _ = crate::commands::models::rescan_local_models;
 };
 
 // Tests (step 1, step 2): written first; stubs make them compile and fail.

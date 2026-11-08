@@ -82,7 +82,6 @@ const APP_COMMANDS: CommandNames = &[
     "get_current_model",
     "get_transcription_model_status",
     "is_model_loading",
-    "rescan_local_models",
     "update_microphone_mode",
     "get_microphone_mode",
     "get_windows_microphone_permission_status",

@@ -26,7 +26,6 @@
     "allow-cancel-download",
     "allow-set-active-model",
     "allow-get-current-model",
-    "allow-update-microphone-mode",
     "allow-get-windows-microphone-permission-status",
     "allow-open-microphone-privacy-settings",
     "allow-get-available-microphones",

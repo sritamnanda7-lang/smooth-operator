@@ -319,3 +319,20 @@ fn fork_size_skips_so_dirs_but_counts_handy_files() {
     assert!(out.contains("src-tauri/src/handy.rs"), "{out}");
     assert!(!out.contains("/so/"), "so/ file was counted: {out}");
 }
+
+// ---- review B1: the microphone mode cannot be changed from the UI, and setup forces on-demand ----
+#[test]
+fn b1_update_microphone_mode_is_not_granted_and_setup_forces_on_demand() {
+    assert!(!granted().contains("allow-update-microphone-mode"), "update_microphone_mode must not be granted");
+    let setup = read(&format!("{STT}/mod.rs"));
+    assert!(setup.contains("force_on_demand"), "stt::setup must switch the live manager to on-demand");
+    let real = read(&format!("{STT}/real.rs"));
+    assert!(real.contains("update_mode(MicrophoneMode::OnDemand)"));
+}
+
+#[test]
+fn rescan_local_models_is_not_a_registered_command() {
+    let lib = read(LIB);
+    let collect = lib.split("collect_commands!").nth(1).unwrap().split("]);").next().unwrap().to_string();
+    assert!(!collect.contains("rescan_local_models"));
+}

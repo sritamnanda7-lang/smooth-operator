@@ -10,5 +10,6 @@ mod watcher_tests;
 mod stt_bench;
 mod stt_engine_log;
 mod stt_model_tests;
+mod stt_review_tests;
 mod stt_tests;
 mod wer_tests;

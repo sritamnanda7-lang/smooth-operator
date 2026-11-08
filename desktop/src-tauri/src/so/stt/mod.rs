@@ -91,6 +91,9 @@ pub fn setup(app: &AppHandle) {
     ) else {
         return;
     };
+    // Handy chose the microphone mode at construction, before our settings were forced: switch the
+    // live manager to on-demand so the mic is open only during a talk.
+    real::MicModeSwitch::force_on_demand(&**rec.inner());
     let app_for_hotkey = app.clone();
     let sink = sink::SpeechSink::new(
         Arc::new(real::RealRecorder::new(rec.inner().clone())),

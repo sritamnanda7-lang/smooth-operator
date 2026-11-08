@@ -98,6 +98,13 @@ impl Engine {
         }
     }
 
+    /// The key source is gone or the app is quitting: end whatever is running (`Cancelled` or
+    /// `Disarmed`) so the sink can close the microphone.
+    pub fn reset(&mut self) -> Option<TalkEvent> {
+        self.talk = None;
+        self.session.reset()
+    }
+
     /// New hotkey: fresh detector, session reset. Returns Cancelled if a talk was active.
     pub fn set_target(&mut self, target: HotkeyChoice) -> Option<TalkEvent> {
         self.detector = Detector::new(target.modifier());
