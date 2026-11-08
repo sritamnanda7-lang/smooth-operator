@@ -4,13 +4,20 @@
 use super::apps::{AppCatalog, AppEntry, FsAppCatalog};
 use super::hands::{AppLauncher, MediaKeys};
 use super::phrase::MediaKey;
+use crate::input::EnigoState;
+use enigo::{Direction, Key, Keyboard};
 use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::mpsc;
+use tauri::Manager;
 use std::time::{Duration, Instant};
 
+/// Media keys through Handy's shared `Enigo` (keyboard-event library). Enigo must run on the app's
+/// main thread on macOS, so the key press is sent there (`run_on_main_thread`) and we wait for the
+/// result. The same 20-line pattern as Handy's private `clipboard::with_enigo`, copied here so no
+/// Handy file changes.
 pub struct EnigoMediaKeys {
-    #[allow(dead_code)]
     app: tauri::AppHandle,
 }
 
@@ -21,8 +28,30 @@ impl EnigoMediaKeys {
 }
 
 impl MediaKeys for EnigoMediaKeys {
-    fn press(&self, _key: MediaKey) -> Result<(), String> {
-        todo!("step 3 increment 5")
+    fn press(&self, key: MediaKey) -> Result<(), String> {
+        // Not set up yet (e.g. Accessibility was granted after launch): Handy's own setup call.
+        if self.app.try_state::<EnigoState>().is_none() {
+            crate::commands::initialize_enigo(self.app.clone())?;
+        }
+        let key = match key {
+            MediaKey::PlayPause => Key::MediaPlayPause,
+            MediaKey::Next => Key::MediaNextTrack,
+            MediaKey::Previous => Key::MediaPrevTrack,
+        };
+        let (tx, rx) = mpsc::sync_channel(1);
+        let app = self.app.clone();
+        self.app
+            .run_on_main_thread(move || {
+                let result = (|| {
+                    let state = app.try_state::<EnigoState>().ok_or("Enigo state not initialized")?;
+                    let mut enigo = state.0.lock().map_err(|e| e.to_string())?;
+                    enigo.key(key, Direction::Click).map_err(|e| e.to_string())
+                })();
+                let _ = tx.send(result);
+            })
+            .map_err(|e| e.to_string())?;
+        // A dropped closure (event loop shutting down) closes the channel.
+        rx.recv_timeout(Duration::from_secs(2)).map_err(|e| e.to_string())?
     }
 }
 
