@@ -444,3 +444,15 @@ fn t30_fn_lost_up_is_corrected_by_the_very_next_event() {
     let out = r.e.feed(&keyev(NONE, Key::LeftArrow, true), r.at(900));
     assert_eq!(out, vec![Stopped(PushToTalk)]);
 }
+
+#[test]
+fn t30b_fn_press_with_inverted_is_key_down_still_counts() {
+    // handy-keys derives Fn `is_key_down` from a stored toggle; after one lost event it is inverted.
+    // The flags still show Fn down, and that is what counts.
+    let mut r = Rig::new(HotkeyChoice::Fn);
+    assert!(r.e.feed(&modev(FN, false, FN), r.at(0)).is_empty());
+    assert!(r.e.needs_tick(), "press was recognised");
+    assert_eq!(r.tick(310), vec![Started(PushToTalk)]);
+    // Release also inverted (is_key_down true), flags show Fn up.
+    assert_eq!(r.e.feed(&modev(NONE, true, FN), r.at(900)), vec![Stopped(PushToTalk)]);
+}

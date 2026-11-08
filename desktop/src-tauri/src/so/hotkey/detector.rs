@@ -140,8 +140,9 @@ impl Detector {
                 }
             }
             Phase::Up => {
-                let target_press =
-                    ev.key.is_none() && ev.is_key_down && ev.changed_modifier == Some(self.target);
+                // Never trust `is_key_down` for the target: handy-keys derives it for Fn from a stored
+                // toggle that one lost event inverts for good. The OS flags (`down_now`) decide.
+                let target_press = ev.key.is_none() && ev.changed_modifier == Some(self.target);
                 if down_now && target_press {
                     if self.others(ev.modifiers).is_empty() {
                         let second = self
