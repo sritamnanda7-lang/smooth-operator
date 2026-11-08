@@ -78,7 +78,10 @@ pub fn run(
             Some(Msg::Key(ev)) => engine.feed(&ev, clock.now()),
             Some(Msg::SetTarget(choice)) => engine.set_target(choice).into_iter().collect(),
             Some(Msg::SourceFailed) => {
-                panel.show(PanelPayload::new(vec![Line::new(SOURCE_FAILED_TEXT, Kind::Warn)]));
+                panel.show(PanelPayload::new(vec![Line::new(
+                    SOURCE_FAILED_TEXT,
+                    Kind::Warn,
+                )]));
                 Vec::new()
             }
             Some(Msg::Shutdown) => return,

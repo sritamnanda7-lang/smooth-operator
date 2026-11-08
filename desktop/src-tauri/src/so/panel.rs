@@ -36,7 +36,10 @@ pub struct Line {
 
 impl Line {
     pub fn new(text: impl Into<String>, kind: Kind) -> Self {
-        Line { text: text.into(), kind }
+        Line {
+            text: text.into(),
+            kind,
+        }
     }
 }
 
@@ -53,7 +56,10 @@ impl PanelPayload {
         let lines = lines
             .into_iter()
             .take(MAX_LINES)
-            .map(|l| Line { text: l.text.chars().take(MAX_CHARS).collect(), kind: l.kind })
+            .map(|l| Line {
+                text: l.text.chars().take(MAX_CHARS).collect(),
+                kind: l.kind,
+            })
             .collect();
         PanelPayload { v: 1, lines }
     }
@@ -64,7 +70,8 @@ impl PanelPayload {
         // Encode twice: first to JSON text, then that text as a JSON string literal. A JSON string
         // literal is also a valid JS string literal, so quotes, backslashes and control characters
         // can never break out of it. serde_json escapes control characters (incl. newlines).
-        let json = serde_json::to_string(self).unwrap_or_else(|_| String::from("{\"v\":1,\"lines\":[]}"));
+        let json =
+            serde_json::to_string(self).unwrap_or_else(|_| String::from("{\"v\":1,\"lines\":[]}"));
         let literal = serde_json::to_string(&json).unwrap_or_else(|_| String::from("\"\""));
         // Also escape `<` (so `</script>` never appears raw) and U+2028/2029 (legal in JSON, but
         // older JS engines treat them as line breaks). `\u003c` etc. are valid JSON escapes too.
@@ -95,16 +102,23 @@ pub enum PanelAction {
 pub fn action_for(event: TalkEvent, hotkey: HotkeyChoice) -> PanelAction {
     let one = |text: String, kind: Kind| PanelPayload::new(vec![Line::new(text, kind)]);
     match event {
-        TalkEvent::Started(Mode::PushToTalk) => PanelAction::Show(one("Listening".into(), Kind::Listening)),
+        TalkEvent::Started(Mode::PushToTalk) => {
+            PanelAction::Show(one("Listening".into(), Kind::Listening))
+        }
         TalkEvent::Started(Mode::FreeTalk) => {
             let key = match hotkey {
                 HotkeyChoice::Fn => "Fn",
                 HotkeyChoice::RightCmd => "Right Cmd",
                 HotkeyChoice::RightCtrl => "Right Ctrl",
             };
-            PanelAction::Show(one(format!("Free talk: press {key} to stop"), Kind::Listening))
+            PanelAction::Show(one(
+                format!("Free talk: press {key} to stop"),
+                Kind::Listening,
+            ))
         }
-        TalkEvent::Stopped(_) => PanelAction::ShowThenHide(one("Stopped".into(), Kind::Info), HIDE_AFTER_STOP),
+        TalkEvent::Stopped(_) => {
+            PanelAction::ShowThenHide(one("Stopped".into(), Kind::Info), HIDE_AFTER_STOP)
+        }
         TalkEvent::Cancelled(_) => PanelAction::Hide,
     }
 }
@@ -121,8 +135,15 @@ pub struct PanelSink {
 }
 
 impl PanelSink {
-    pub fn new(panel: Arc<dyn PanelOut>, hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>) -> Self {
-        PanelSink { panel, hotkey, generation: Arc::new(AtomicU64::new(0)) }
+    pub fn new(
+        panel: Arc<dyn PanelOut>,
+        hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
+    ) -> Self {
+        PanelSink {
+            panel,
+            hotkey,
+            generation: Arc::new(AtomicU64::new(0)),
+        }
     }
 }
 
@@ -151,7 +172,6 @@ impl TalkSink for PanelSink {
 pub fn nav_allowed(url: &tauri::Url, debug: bool) -> bool {
     super::webview::app_origin(url, debug) && url.path() == PAGE_PATH
 }
-
 
 // ---------------------------------------------------------------------------------------------
 // The window. (A "non-activating panel" is a macOS window that can be shown without becoming the
@@ -188,7 +208,7 @@ fn set_last(payload: Option<PanelPayload>) {
 
 /// The only place that runs JS in the panel: one fixed call with the payload as a data literal.
 fn push(win: &WebviewWindow, payload: &PanelPayload) {
-    let _ = win.eval(&payload.eval_script());
+    let _ = win.eval(payload.eval_script());
 }
 
 /// Monitor under the mouse, else the primary monitor.
@@ -241,7 +261,8 @@ pub fn create(app: &AppHandle) {
     let debug = cfg!(debug_assertions);
     // Own page only; every `window.open` is denied.
     let nav = move |u: &tauri::Url| nav_allowed(u, debug);
-    let new_window = |_u: tauri::Url, _f: tauri::webview::NewWindowFeatures| NewWindowResponse::Deny;
+    let new_window =
+        |_u: tauri::Url, _f: tauri::webview::NewWindowFeatures| NewWindowResponse::Deny;
     let on_load = |win: WebviewWindow, payload: tauri::webview::PageLoadPayload<'_>| {
         if payload.event() == PageLoadEvent::Finished {
             if let Some(last) = last_payload() {
@@ -256,7 +277,10 @@ pub fn create(app: &AppHandle) {
             .url(url)
             .title("Smooth Operator panel")
             .level(PanelLevel::Status)
-            .size(tauri::Size::Logical(tauri::LogicalSize { width: WIDTH, height: HEIGHT }))
+            .size(tauri::Size::Logical(tauri::LogicalSize {
+                width: WIDTH,
+                height: HEIGHT,
+            }))
             .has_shadow(false)
             .transparent(true)
             .no_activate(true)
@@ -270,7 +294,11 @@ pub fn create(app: &AppHandle) {
                     .on_new_window(new_window)
                     .on_page_load(on_load)
             })
-            .collection_behavior(CollectionBehavior::new().can_join_all_spaces().full_screen_auxiliary())
+            .collection_behavior(
+                CollectionBehavior::new()
+                    .can_join_all_spaces()
+                    .full_screen_auxiliary(),
+            )
             .build();
         if let Ok(panel) = built {
             panel.hide();

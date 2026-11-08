@@ -58,7 +58,12 @@ pub struct FnCheckReport {
 /// `applies` is true only when the hotkey is Fn. When false, nothing else is read (env is not called).
 pub fn check(env: &dyn FnEnv, hotkey: HotkeyChoice) -> FnCheckReport {
     if hotkey != HotkeyChoice::Fn {
-        return FnCheckReport { applies: false, globe: Globe::Unknown, dictation: Dictation::Unknown, apps: Vec::new() };
+        return FnCheckReport {
+            applies: false,
+            globe: Globe::Unknown,
+            dictation: Dictation::Unknown,
+            apps: Vec::new(),
+        };
     }
     let globe = match env.globe_usage() {
         Some(0) => Globe::Ok,
@@ -82,18 +87,26 @@ pub fn check(env: &dyn FnEnv, hotkey: HotkeyChoice) -> FnCheckReport {
         .filter(|a| a.bundle_ids.iter().any(|id| running.contains(id)))
         .map(|a| a.name)
         .collect();
-    FnCheckReport { applies: true, globe, dictation, apps }
+    FnCheckReport {
+        applies: true,
+        globe,
+        dictation,
+        apps,
+    }
 }
 
 /// One line for the panel at launch when the check finds a problem (shown for `LAUNCH_WARNING_SECS`).
-pub const LAUNCH_WARNING: &str = "Fn may clash with macOS or another app. Open Settings for details.";
+pub const LAUNCH_WARNING: &str =
+    "Fn may clash with macOS or another app. Open Settings for details.";
 pub const LAUNCH_WARNING_SECS: u64 = 6;
 
 impl FnCheckReport {
     /// A real problem was found (unknown results are not problems).
     pub fn has_problem(&self) -> bool {
         self.applies
-            && (matches!(self.globe, Globe::Warn(_)) || self.dictation == Dictation::Warn || !self.apps.is_empty())
+            && (matches!(self.globe, Globe::Warn(_))
+                || self.dictation == Dictation::Warn
+                || !self.apps.is_empty())
     }
 }
 

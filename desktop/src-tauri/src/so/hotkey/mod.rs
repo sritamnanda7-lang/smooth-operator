@@ -30,7 +30,10 @@ pub struct Engine {
 
 impl Engine {
     pub fn new(target: HotkeyChoice) -> Self {
-        Engine { detector: Detector::new(target.modifier()), session: Session::new() }
+        Engine {
+            detector: Detector::new(target.modifier()),
+            session: Session::new(),
+        }
     }
 
     fn run_outs(&mut self, outs: Vec<detector::DetOut>) -> Vec<TalkEvent> {
@@ -80,7 +83,9 @@ impl Default for Starter {
 
 impl Starter {
     pub fn new() -> Self {
-        Starter { tx: Mutex::new(None) }
+        Starter {
+            tx: Mutex::new(None),
+        }
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Option<Sender<Msg>>> {
@@ -102,7 +107,8 @@ impl Starter {
     }
 }
 
-pub const START_FAILED_TEXT: &str = "Key watcher could not start: check Accessibility/Input Monitoring";
+pub const START_FAILED_TEXT: &str =
+    "Key watcher could not start: check Accessibility/Input Monitoring";
 
 /// Idempotent start. If already started: Ok, `make_source` is NOT called. Otherwise calls `make_source`;
 /// on Err: shows ONE Warn line in the panel (non-empty text), stays not-started (so a retry works), returns Err.
@@ -123,7 +129,10 @@ pub fn start_with(
     let source = match make_source() {
         Ok(s) => s,
         Err(e) => {
-            panel.show(PanelPayload::new(vec![Line::new(START_FAILED_TEXT, Kind::Warn)]));
+            panel.show(PanelPayload::new(vec![Line::new(
+                START_FAILED_TEXT,
+                Kind::Warn,
+            )]));
             return Err(e);
         }
     };
@@ -134,7 +143,10 @@ pub fn start_with(
         .name("so-hotkey-watcher".into())
         .spawn(move || watcher::run(rx, initial, sink, panel_for_run, clock));
     if spawned.is_err() {
-        panel.show(PanelPayload::new(vec![Line::new(START_FAILED_TEXT, Kind::Warn)]));
+        panel.show(PanelPayload::new(vec![Line::new(
+            START_FAILED_TEXT,
+            Kind::Warn,
+        )]));
         return Err(SourceError);
     }
     *guard = Some(tx);
@@ -147,7 +159,11 @@ struct ListenerSource(Mutex<KeyboardListener>);
 
 impl KeySource for ListenerSource {
     fn recv(&self) -> Result<KeyEvent, SourceError> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner()).recv().map_err(|_| SourceError)
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .recv()
+            .map_err(|_| SourceError)
     }
 }
 

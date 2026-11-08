@@ -70,12 +70,16 @@ impl HotkeyChoice {
 
     /// Exact name -> choice, only if this OS offers it.
     fn parse(value: &str, p: Platform) -> Option<Self> {
-        Self::options_for(p).into_iter().find(|c| c.as_str() == value)
+        Self::options_for(p)
+            .into_iter()
+            .find(|c| c.as_str() == value)
     }
 
     /// Stored value (None = never set). A missing, unknown or not-allowed-on-this-OS value gives the OS default.
     pub fn from_stored(stored: Option<&str>, p: Platform) -> Self {
-        stored.and_then(|v| Self::parse(v, p)).unwrap_or_else(|| Self::default_for(p))
+        stored
+            .and_then(|v| Self::parse(v, p))
+            .unwrap_or_else(|| Self::default_for(p))
     }
 
     /// Value from an IPC command. A bad or not-allowed-on-this-OS value is an error (never silently replaced).
@@ -101,6 +105,11 @@ pub fn save_hotkey(app: &AppHandle, choice: HotkeyChoice) -> Result<(), String> 
     let store = app
         .store(crate::portable::store_path(STORE_PATH))
         .map_err(|_| String::from("could not open settings"))?;
-    store.set(HOTKEY_KEY, serde_json::Value::String(choice.as_str().to_owned()));
-    store.save().map_err(|_| String::from("could not save settings"))
+    store.set(
+        HOTKEY_KEY,
+        serde_json::Value::String(choice.as_str().to_owned()),
+    );
+    store
+        .save()
+        .map_err(|_| String::from("could not save settings"))
 }

@@ -20,7 +20,10 @@ function isPlainObject(x: unknown): x is Record<string, unknown> {
 
 /** Class for a kind. Only an own key of the fixed map counts ("__proto__", "toString" etc. do not). */
 function classFor(kind: unknown): string {
-  if (typeof kind === "string" && Object.prototype.hasOwnProperty.call(KIND_CLASS, kind)) {
+  if (
+    typeof kind === "string" &&
+    Object.prototype.hasOwnProperty.call(KIND_CLASS, kind)
+  ) {
     return KIND_CLASS[kind];
   }
   return KIND_CLASS.info;
@@ -28,7 +31,11 @@ function classFor(kind: unknown): string {
 
 /** Render a payload into `root` using textContent only. Returns true if applied, false if ignored (bad version, not an array, ...). At most 6 lines. */
 export function renderPayload(root: HTMLElement, payload: unknown): boolean {
-  if (!isPlainObject(payload) || payload.v !== 1 || !Array.isArray(payload.lines)) {
+  if (
+    !isPlainObject(payload) ||
+    payload.v !== 1 ||
+    !Array.isArray(payload.lines)
+  ) {
     return false;
   }
   const doc = root.ownerDocument;

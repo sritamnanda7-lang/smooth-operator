@@ -3,7 +3,11 @@
 // It lets a message through only when it is a plain object (not a function, class instance, array,
 // or anything with extra behaviour). Rust still checks the command name against the capability file.
 window.__TAURI_ISOLATION_HOOK__ = (payload) => {
-  if (payload === null || typeof payload !== "object" || Array.isArray(payload)) {
+  if (
+    payload === null ||
+    typeof payload !== "object" ||
+    Array.isArray(payload)
+  ) {
     throw new Error("IPC blocked: payload is not a plain object");
   }
   const proto = Object.getPrototypeOf(payload);

@@ -74,7 +74,8 @@ impl Session {
                 self.state = State::Idle;
                 Some(TalkEvent::Stopped(PushToTalk))
             }
-            (State::PushToTalk, DetOut::Dirty) | (State::PushToTalk, DetOut::Release { clean: false }) => {
+            (State::PushToTalk, DetOut::Dirty)
+            | (State::PushToTalk, DetOut::Release { clean: false }) => {
                 self.state = State::Idle;
                 Some(TalkEvent::Cancelled(PushToTalk))
             }

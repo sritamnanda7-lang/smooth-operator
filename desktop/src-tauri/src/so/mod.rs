@@ -23,7 +23,11 @@ pub fn setup(app: &AppHandle) {
     let report = fncheck::check(&*fncheck::system_env(), hotkey);
     if report.has_problem() {
         let line = PanelPayload::new(vec![Line::new(fncheck::LAUNCH_WARNING, Kind::Warn)]);
-        panel::show_timed(&panel::panel_out(app), line, Duration::from_secs(fncheck::LAUNCH_WARNING_SECS));
+        panel::show_timed(
+            &panel::panel_out(app),
+            line,
+            Duration::from_secs(fncheck::LAUNCH_WARNING_SECS),
+        );
     }
 }
 

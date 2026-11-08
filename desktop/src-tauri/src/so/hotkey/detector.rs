@@ -60,12 +60,19 @@ pub struct Detector {
 
 /// Enter / Esc are the approve / skip keys of later steps: they never count as "another key".
 fn is_approve_or_cancel(key: Option<Key>) -> bool {
-    matches!(key, Some(Key::Return) | Some(Key::KeypadEnter) | Some(Key::Escape))
+    matches!(
+        key,
+        Some(Key::Return) | Some(Key::KeypadEnter) | Some(Key::Escape)
+    )
 }
 
 impl Detector {
     pub fn new(target: Modifiers) -> Self {
-        Detector { target, phase: Phase::Up, last_tap: None }
+        Detector {
+            target,
+            phase: Phase::Up,
+            last_tap: None,
+        }
     }
 
     /// Modifiers that count as "another modifier". Fn is ignored unless it is the target: macOS
@@ -87,7 +94,9 @@ impl Detector {
         match ev.key {
             Some(_) => !is_approve_or_cancel(ev.key),
             None => match ev.changed_modifier {
-                Some(m) => m != self.target && !(m == Modifiers::FN && self.target != Modifiers::FN),
+                Some(m) => {
+                    m != self.target && !(m == Modifiers::FN && self.target != Modifiers::FN)
+                }
                 None => false,
             },
         }
@@ -102,15 +111,26 @@ impl Detector {
         let down_now = ev.modifiers.contains(self.target);
 
         match self.phase {
-            Phase::Down { start, hold_sent, dirty, second } => {
+            Phase::Down {
+                start,
+                hold_sent,
+                dirty,
+                second,
+            } => {
                 if !down_now {
                     // Released (also when the key-up event itself was lost).
                     out.push(DetOut::Release { clean: !dirty });
-                    let tap = !dirty && !hold_sent && !second && now.duration_since(start) < HOLD_AFTER;
+                    let tap =
+                        !dirty && !hold_sent && !second && now.duration_since(start) < HOLD_AFTER;
                     self.last_tap = if tap { Some(now) } else { None };
                     self.phase = Phase::Up;
                 } else if !dirty && self.is_other_down(ev) {
-                    self.phase = Phase::Down { start, hold_sent, dirty: true, second };
+                    self.phase = Phase::Down {
+                        start,
+                        hold_sent,
+                        dirty: true,
+                        second,
+                    };
                     out.push(DetOut::Dirty);
                 }
             }
@@ -120,12 +140,20 @@ impl Detector {
                 }
             }
             Phase::Up => {
-                let target_press = ev.key.is_none() && ev.is_key_down && ev.changed_modifier == Some(self.target);
+                let target_press =
+                    ev.key.is_none() && ev.is_key_down && ev.changed_modifier == Some(self.target);
                 if down_now && target_press {
                     if self.others(ev.modifiers).is_empty() {
-                        let second = self.last_tap.is_some_and(|t| now.duration_since(t) <= DOUBLE_TAP_GAP);
+                        let second = self
+                            .last_tap
+                            .is_some_and(|t| now.duration_since(t) <= DOUBLE_TAP_GAP);
                         self.last_tap = None;
-                        self.phase = Phase::Down { start: now, hold_sent: false, dirty: false, second };
+                        self.phase = Phase::Down {
+                            start: now,
+                            hold_sent: false,
+                            dirty: false,
+                            second,
+                        };
                         out.push(DetOut::Down);
                         if second {
                             out.push(DetOut::DoubleTap);
@@ -150,9 +178,20 @@ impl Detector {
 
     /// Call while `needs_tick()` so a hold is noticed while the key is still down.
     pub fn tick(&mut self, now: Instant) -> Vec<DetOut> {
-        if let Phase::Down { start, hold_sent: false, dirty: false, second: false } = self.phase {
+        if let Phase::Down {
+            start,
+            hold_sent: false,
+            dirty: false,
+            second: false,
+        } = self.phase
+        {
             if now.duration_since(start) >= HOLD_AFTER {
-                self.phase = Phase::Down { start, hold_sent: true, dirty: false, second: false };
+                self.phase = Phase::Down {
+                    start,
+                    hold_sent: true,
+                    dirty: false,
+                    second: false,
+                };
                 return vec![DetOut::Hold];
             }
         }
@@ -161,7 +200,15 @@ impl Detector {
 
     /// True only while a press waits for the 300 ms hold timer.
     pub fn needs_tick(&self) -> bool {
-        matches!(self.phase, Phase::Down { hold_sent: false, dirty: false, second: false, .. })
+        matches!(
+            self.phase,
+            Phase::Down {
+                hold_sent: false,
+                dirty: false,
+                second: false,
+                ..
+            }
+        )
     }
 
     /// Forget a remembered tap (used after a free-talk ends so the ending tap cannot start a new double-tap).
