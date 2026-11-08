@@ -89,6 +89,8 @@ jobs:
 
   build-win:
     name: build-win
+    # Paused (Mac-only focus). Re-enable: repo Settings > Secrets and variables > Actions > Variables > WINDOWS_CI = true
+    if: vars.WINDOWS_CI == 'true'
     runs-on: windows-latest # x64
     timeout-minutes: 120
     steps:
