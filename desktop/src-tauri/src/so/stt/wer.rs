@@ -7,10 +7,30 @@
 use std::collections::BTreeMap;
 
 const ONES: [&str; 20] = [
-    "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
-    "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen",
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
 ];
-const TENS: [&str; 8] = ["twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+const TENS: [&str; 8] = [
+    "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+];
 
 /// Lower-case; punctuation (including the dots in "p.m.") is dropped; "3pm" / "3 p.m." / "three pm"
 /// all become `["three", "pm"]` (digits 0-99 spelled out; a number glued to letters is split).
@@ -19,7 +39,11 @@ pub fn normalize(text: &str) -> Vec<String> {
     // Pass 1: drop the dot inside an abbreviation (single letter, dot, letter) so "p.m." is "pm".
     let mut flat = String::with_capacity(chars.len());
     for (i, &c) in chars.iter().enumerate() {
-        if c == '.' && i >= 1 && chars[i - 1].is_alphabetic() && chars.get(i + 1).is_some_and(|n| n.is_alphabetic()) {
+        if c == '.'
+            && i >= 1
+            && chars[i - 1].is_alphabetic()
+            && chars.get(i + 1).is_some_and(|n| n.is_alphabetic())
+        {
             let single = i < 2 || !chars[i - 2].is_alphabetic();
             if single {
                 continue;
@@ -30,7 +54,7 @@ pub fn normalize(text: &str) -> Vec<String> {
     // Pass 2: split on everything but letters, digits and apostrophes; split digit/letter borders.
     let mut out = Vec::new();
     let mut cur = String::new();
-    let mut flush = |cur: &mut String, out: &mut Vec<String>| {
+    let flush = |cur: &mut String, out: &mut Vec<String>| {
         if cur.is_empty() {
             return;
         }
@@ -116,11 +140,23 @@ pub struct BenchAcc {
 
 impl BenchAcc {
     pub fn new() -> Self {
-        BenchAcc { cells: BTreeMap::new() }
+        BenchAcc {
+            cells: BTreeMap::new(),
+        }
     }
 
-    pub fn add(&mut self, model: &str, accent: &str, reference: &str, hypothesis: &str, decode_ms: u64) {
-        let c = self.cells.entry((model.to_string(), accent.to_string())).or_default();
+    pub fn add(
+        &mut self,
+        model: &str,
+        accent: &str,
+        reference: &str,
+        hypothesis: &str,
+        decode_ms: u64,
+    ) {
+        let c = self
+            .cells
+            .entry((model.to_string(), accent.to_string()))
+            .or_default();
         let e = word_errors(reference, hypothesis);
         c.errors += e;
         c.words += normalize(reference).len();
@@ -132,7 +168,11 @@ impl BenchAcc {
     /// Pooled WER % (all errors / all reference words) for one model x accent, if it has rows.
     pub fn pooled_wer_pct(&self, model: &str, accent: &str) -> Option<f64> {
         let c = self.cells.get(&(model.to_string(), accent.to_string()))?;
-        Some(if c.words == 0 { 0.0 } else { 100.0 * c.errors as f64 / c.words as f64 })
+        Some(if c.words == 0 {
+            0.0
+        } else {
+            100.0 * c.errors as f64 / c.words as f64
+        })
     }
 
     /// Markdown table: model, accent, n, pooled WER % with one decimal ("50.0"), exact-match %, best
@@ -144,7 +184,11 @@ impl BenchAcc {
         );
         for ((model, accent), c) in &self.cells {
             let n = c.clip_wer.len();
-            let wer_pct = if c.words == 0 { 0.0 } else { 100.0 * c.errors as f64 / c.words as f64 };
+            let wer_pct = if c.words == 0 {
+                0.0
+            } else {
+                100.0 * c.errors as f64 / c.words as f64
+            };
             let best = c.clip_wer.iter().copied().fold(f64::INFINITY, f64::min) * 100.0;
             let worst = c.clip_wer.iter().copied().fold(0.0, f64::max) * 100.0;
             let mut ms = c.ms.clone();
