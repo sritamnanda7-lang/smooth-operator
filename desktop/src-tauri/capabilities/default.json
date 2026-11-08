@@ -11,7 +11,6 @@
     "core:app:allow-version",
     "os:allow-locale",
     "process:allow-restart",
-    "macos-permissions:default",
     "allow-get-app-settings",
     "allow-get-default-settings",
     "allow-initialize-enigo",
@@ -67,6 +66,13 @@
     "allow-so-get-hotkey",
     "allow-so-set-hotkey",
     "allow-so-hotkey-options",
-    "allow-so-fn-check"
+    "allow-so-fn-check",
+    "macos-permissions:allow-check-accessibility-permission",
+    "macos-permissions:allow-request-accessibility-permission",
+    "macos-permissions:allow-check-microphone-permission",
+    "macos-permissions:allow-request-microphone-permission",
+    "allow-get-transcription-model-status",
+    "allow-is-recording",
+    "allow-get-available-accelerators"
   ]
 }
