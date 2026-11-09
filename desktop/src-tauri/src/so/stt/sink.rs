@@ -24,7 +24,7 @@ use super::silence::{End, SilenceWatch};
 use super::{HEARD_SECS, MIC_OPEN_AT, MicOpenAt};
 use crate::so::hotkey::session::{Mode, TalkEvent};
 use crate::so::hotkey::watcher::{Clock, TalkSink};
-use crate::so::rules::{metrics as rules_metrics, PassThrough, Route, TranscriptRouter};
+use crate::so::rules::{metrics as rules_metrics, PassThrough, Route, SlowRouter, TranscriptRouter};
 use crate::so::panel::{self, Kind, Line, PanelAction, PanelOut, PanelPayload, TaggedPanel};
 use crate::so::settings::HotkeyChoice;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -230,6 +230,22 @@ impl SpeechSink {
         }
     }
 
+    /// Same as `with_router`, plus a brain for talks the router passes through (stub: ignores it).
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_brain(
+        recorder: Arc<dyn Recorder>,
+        transcriber: Arc<dyn Transcriber>,
+        panel: Arc<dyn PanelOut>,
+        clock: Arc<dyn Clock>,
+        tap: Arc<dyn SpeechTap>,
+        stopper: Arc<dyn Stopper>,
+        hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
+        router: Arc<dyn TranscriptRouter>,
+        _brain: Arc<dyn SlowRouter>,
+    ) -> Self {
+        Self::with_router(recorder, transcriber, panel, clock, tap, stopper, hotkey, router)
+    }
+
     /// Debug builds only: a typed phrase enters as a new talk (talk id +1, `stopped_at` = now), then
     /// `deliver`, on its own thread so the caller returns at once. No "Listening" cue.
     #[cfg(debug_assertions)]
@@ -247,6 +263,7 @@ impl SpeechSink {
 // so/mod.rs: this reference avoids a dead-code warning without an allow.
 const _: () = {
     let _ = SpeechSink::new;
+    let _ = SpeechSink::with_brain;
 };
 
 impl TalkSink for SpeechSink {

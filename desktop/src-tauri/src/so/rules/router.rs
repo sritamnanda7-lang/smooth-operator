@@ -34,6 +34,12 @@ impl FastRouter {
         FastRouter { media, apps, launcher, clock }
     }
 
+    /// When on, "open X" with no installed match logs outcome 4 and passes through to the brain
+    /// instead of "I couldn't find...". `FastRouter::new` alone keeps the step-3 behaviour.
+    pub fn not_found_to_brain(self) -> Self {
+        self
+    }
+
     /// Logs the outcome code and the time from the end of the talk, and returns the panel line.
     fn done(&self, outcome: u8, stopped_at: Instant, line: Line) -> Route {
         let ms = self.clock.now().saturating_duration_since(stopped_at).as_millis() as u64;
@@ -93,3 +99,7 @@ impl TranscriptRouter for FastRouter {
         }
     }
 }
+
+const _: () = {
+    let _ = FastRouter::not_found_to_brain;
+};
