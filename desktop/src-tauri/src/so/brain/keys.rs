@@ -7,10 +7,29 @@ use super::provider::ProviderId;
 /// A wrapper type: no `Clone`, `Display`, `Serialize` or `specta::Type`; `Debug` prints "ApiKey(<redacted>)".
 pub struct ApiKey(String);
 
+/// Hand-written (not derived) so the secret can never appear in a debug print or a panic message.
+impl std::fmt::Debug for ApiKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ApiKey(<redacted>)")
+    }
+}
+
 impl ApiKey {
-    /// Trims, then checks: 20-256 chars, visible ASCII only.
-    pub fn parse(_raw: &str) -> Result<ApiKey, KeyFormatError> {
-        todo!()
+    /// Trims, then checks: visible ASCII only (no spaces), 20-256 characters. No provider prefix check
+    /// (key formats change).
+    pub fn parse(raw: &str) -> Result<ApiKey, KeyFormatError> {
+        let text = raw.trim();
+        if text.is_empty() {
+            return Err(KeyFormatError::Empty);
+        }
+        if !text.bytes().all(|b| (0x21..=0x7e).contains(&b)) {
+            return Err(KeyFormatError::BadChars);
+        }
+        match text.len() {
+            0..=19 => Err(KeyFormatError::TooShort),
+            20..=256 => Ok(ApiKey(text.to_string())),
+            _ => Err(KeyFormatError::TooLong),
+        }
     }
 
     pub(crate) fn expose(&self) -> &str {

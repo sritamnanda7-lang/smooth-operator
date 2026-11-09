@@ -14,8 +14,10 @@ pub fn save_provider(_app: &AppHandle, _p: ProviderId) -> Result<(), String> {
 }
 
 /// `[a-z0-9][a-z0-9.-]{0,63}`; a bad override falls back to the default model.
-pub fn valid_model(_name: &str) -> bool {
-    todo!()
+pub fn valid_model(name: &str) -> bool {
+    let mut chars = name.chars();
+    let first_ok = chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
+    first_ok && name.len() <= 64 && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-')
 }
 
 // Stub phase: nothing in the app calls these yet (increments 1-6 wire them). This reference keeps them
