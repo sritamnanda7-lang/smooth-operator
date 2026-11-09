@@ -3,8 +3,8 @@
 //! functions that take a `&dyn KeyStore`. `so_brain_save_key` is the ONLY inbound key path.
 
 use super::brain::BrainChoice;
-use super::keys::KeyStore;
-use super::provider::ProviderId;
+use super::keys::{ApiKey, KeyStore};
+use super::provider::{ProviderId, PROVIDERS};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
@@ -42,12 +42,31 @@ pub enum ConsolePage {
     Spend,
 }
 
-pub fn save_key_with(_store: &dyn KeyStore, _p: ProviderId, _raw: String) -> Result<(), String> {
-    todo!()
+/// Fixed texts for the page: never an echo of the input, never an error detail.
+pub const KEY_WRONG_TEXT: &str = "Key looks wrong: paste the whole key";
+pub const KEY_NOT_SAVED_TEXT: &str = "Couldn't save the key";
+
+/// Checks the format, then stores the key. The raw text is dropped at once and never echoed.
+pub fn save_key_with(store: &dyn KeyStore, p: ProviderId, raw: String) -> Result<(), String> {
+    let secret = ApiKey::parse(&raw).map_err(|_| KEY_WRONG_TEXT.to_string())?;
+    drop(raw);
+    store.set(p, &secret).map_err(|_| KEY_NOT_SAVED_TEXT.to_string())
 }
 
-pub fn status_with(_store: &dyn KeyStore, _choice: &BrainChoice) -> BrainStatus {
-    todo!()
+/// One row per provider. `key_saved` comes from reading the key and dropping it at once; a locked or
+/// denied Keychain reads as "no key". The chosen provider shows the chosen model, the other its default.
+pub fn status_with(store: &dyn KeyStore, choice: &BrainChoice) -> BrainStatus {
+    let providers = PROVIDERS
+        .iter()
+        .map(|info| ProviderView {
+            id: info.id,
+            label: info.label.to_string(),
+            recommended: info.recommended,
+            key_saved: matches!(store.get(info.id), Ok(Some(_))),
+            model: if info.id == choice.provider { choice.model.clone() } else { info.default_model.to_string() },
+        })
+        .collect();
+    BrainStatus { provider: choice.provider, providers }
 }
 
 #[tauri::command]

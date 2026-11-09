@@ -23,14 +23,13 @@ pub struct ProviderInfo {
     pub recommended: bool,
 }
 
-/// `key_url` and `spend_url` are empty in the stub: tests/net-allowlist.txt (a test file) must list the
-/// console hosts before the URLs go in.
+/// Model names and console URLs are from the Rev 2 research (resources/step-4-research.md).
 pub const PROVIDERS: &[ProviderInfo] = &[
     ProviderInfo {
         id: ProviderId::Claude,
         label: "Claude",
-        key_url: "",
-        spend_url: "",
+        key_url: "https://platform.claude.com/settings/keys",
+        spend_url: "https://platform.claude.com/settings/billing",
         default_model: "claude-haiku-5-5",
         models: &["claude-haiku-5-5", "claude-sonnet-5-5"],
         recommended: true,
@@ -38,8 +37,8 @@ pub const PROVIDERS: &[ProviderInfo] = &[
     ProviderInfo {
         id: ProviderId::Gemini,
         label: "Gemini",
-        key_url: "",
-        spend_url: "",
+        key_url: "https://aistudio.google.com/apikey",
+        spend_url: "https://aistudio.google.com/spend",
         default_model: "gemini-3.5-flash-lite",
         models: &["gemini-3.5-flash-lite"],
         recommended: false,

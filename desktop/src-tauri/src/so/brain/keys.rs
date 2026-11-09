@@ -3,6 +3,8 @@
 //! Keychain (via `keyring`, added in increment 3).
 
 use super::provider::ProviderId;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
 /// A wrapper type: no `Clone`, `Display`, `Serialize` or `specta::Type`; `Debug` prints "ApiKey(<redacted>)".
 pub struct ApiKey(String);
@@ -71,66 +73,121 @@ pub fn service() -> &'static str {
     }
 }
 
-/// The real Keychain (stub until the `keyring` dependency lands in increment 3).
-pub struct KeyringStore;
+/// The account name of a provider inside a Keychain service: "claude" or "gemini".
+fn account(p: ProviderId) -> &'static str {
+    match p {
+        ProviderId::Claude => "claude",
+        ProviderId::Gemini => "gemini",
+    }
+}
+
+/// The real macOS Keychain (the Mac's password safe), through the `keyring` crate. All calls block, so
+/// callers use `spawn_blocking`. One internal lock makes calls on one store run one at a time.
+pub struct KeyringStore {
+    service: String,
+    lock: Mutex<()>,
+}
 
 impl KeyringStore {
-    pub fn new(_service: &str) -> Self {
-        todo!()
+    pub fn new(service: &str) -> Self {
+        KeyringStore { service: service.to_string(), lock: Mutex::new(()) }
     }
 }
 
+/// Maps a Keychain failure to a fixed code. The crate's error text is dropped: it could name the item.
+#[cfg(target_os = "macos")]
+fn map_keyring(e: &keyring::Error) -> KeyError {
+    match e {
+        keyring::Error::NoStorageAccess(_) => KeyError::Locked,
+        keyring::Error::PlatformFailure(_) => KeyError::Denied,
+        _ => KeyError::Backend,
+    }
+}
+
+#[cfg(target_os = "macos")]
 impl KeyStore for KeyringStore {
-    fn set(&self, _p: ProviderId, _key: &ApiKey) -> Result<(), KeyError> {
-        todo!()
+    fn set(&self, p: ProviderId, secret: &ApiKey) -> Result<(), KeyError> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = keyring::Entry::new(&self.service, account(p)).map_err(|e| map_keyring(&e))?;
+        entry.set_password(secret.expose()).map_err(|e| map_keyring(&e))
+    }
+    fn get(&self, p: ProviderId) -> Result<Option<ApiKey>, KeyError> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = keyring::Entry::new(&self.service, account(p)).map_err(|e| map_keyring(&e))?;
+        match entry.get_password() {
+            Ok(text) => Ok(ApiKey::parse(&text).ok()),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(map_keyring(&e)),
+        }
+    }
+    fn delete(&self, p: ProviderId) -> Result<(), KeyError> {
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = keyring::Entry::new(&self.service, account(p)).map_err(|e| map_keyring(&e))?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(map_keyring(&e)),
+        }
+    }
+}
+
+/// Other systems have no store yet (Windows comes in its own phase): every call fails closed.
+#[cfg(not(target_os = "macos"))]
+impl KeyStore for KeyringStore {
+    fn set(&self, _p: ProviderId, _secret: &ApiKey) -> Result<(), KeyError> {
+        let _ = (&self.service, &self.lock, account(_p));
+        Err(KeyError::Backend)
     }
     fn get(&self, _p: ProviderId) -> Result<Option<ApiKey>, KeyError> {
-        todo!()
+        Err(KeyError::Backend)
     }
     fn delete(&self, _p: ProviderId) -> Result<(), KeyError> {
-        todo!()
+        Err(KeyError::Backend)
     }
 }
 
-/// In memory only: tests and the debug fake mode.
-pub struct MemoryKeyStore;
+/// In memory only: tests and the debug fake mode. Keys are lost when the app quits.
+pub struct MemoryKeyStore {
+    items: Mutex<HashMap<&'static str, String>>,
+}
 
 impl MemoryKeyStore {
     pub fn new() -> Self {
-        todo!()
+        MemoryKeyStore { items: Mutex::new(HashMap::new()) }
+    }
+}
+
+impl Default for MemoryKeyStore {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
 impl KeyStore for MemoryKeyStore {
-    fn set(&self, _p: ProviderId, _key: &ApiKey) -> Result<(), KeyError> {
-        todo!()
+    fn set(&self, p: ProviderId, secret: &ApiKey) -> Result<(), KeyError> {
+        let mut items = self.items.lock().unwrap_or_else(|e| e.into_inner());
+        items.insert(account(p), secret.expose().to_string());
+        Ok(())
     }
-    fn get(&self, _p: ProviderId) -> Result<Option<ApiKey>, KeyError> {
-        todo!()
+    fn get(&self, p: ProviderId) -> Result<Option<ApiKey>, KeyError> {
+        let items = self.items.lock().unwrap_or_else(|e| e.into_inner());
+        Ok(items.get(account(p)).and_then(|t| ApiKey::parse(t).ok()))
     }
-    fn delete(&self, _p: ProviderId) -> Result<(), KeyError> {
-        todo!()
+    fn delete(&self, p: ProviderId) -> Result<(), KeyError> {
+        let mut items = self.items.lock().unwrap_or_else(|e| e.into_inner());
+        items.remove(account(p));
+        Ok(())
     }
 }
 
-// Stub phase: nothing in the app calls these yet (increments 1-6 wire them). This reference keeps them
-// compiled without a dead-code warning and without an allow (strip-check s05).
+// Not wired into the app until increments 4 to 6. Keeps the items compiled without a dead-code warning
+// and without an allow (strip-check s05). Delete it when the brain and the commands use them.
 const _: () = {
-    std::mem::forget(ApiKey(String::new()));
     let _ = ApiKey::parse;
-    let _ = ApiKey::expose;
-    let _ = KeyFormatError::Empty;
-    let _ = KeyError::Locked;
-    let _ = <Option<&dyn KeyStore>>::None;
-    let _ = SERVICE_RELEASE;
-    let _ = service;
-    let _ = KeyringStore;
-    let _ = KeyringStore::new;
-    let _ = MemoryKeyStore;
-    let _ = MemoryKeyStore::new;
-    let _ = (KeyFormatError::TooShort, KeyFormatError::TooLong, KeyFormatError::BadChars);
-    let _ = (KeyError::Denied, KeyError::Backend);
-    let _ = <MemoryKeyStore as KeyStore>::set;
-    let _ = <MemoryKeyStore as KeyStore>::get;
-    let _ = <MemoryKeyStore as KeyStore>::delete;
+    let _ = (KeyFormatError::TooShort, KeyFormatError::TooLong, KeyFormatError::BadChars, KeyFormatError::Empty);
+    let _ = (KeyError::Locked, KeyError::Denied, KeyError::Backend);
+    let _ = (SERVICE_RELEASE, service);
+    let _ = (KeyringStore::new, MemoryKeyStore::new);
+    let _ = <KeyringStore as KeyStore>::set;
+    let _ = <KeyringStore as KeyStore>::get;
+    let _ = <KeyringStore as KeyStore>::delete;
 };

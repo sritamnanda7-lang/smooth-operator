@@ -154,6 +154,7 @@ transcribe-cpp = { version = "0.4.0", default-features = false, features = ["met
 transcribe-cpp = { version = "0.4.0", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "=3.6.3", default-features = false, features = ["apple-native"] }
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "da9c9a8d4eb7f0524a2508988df1a7d9585b4904" }
 # Used by the receipt-sequenced ("reliable") paste path for lazy NSPasteboard
 # promises. Versions track what Tauri already pulls in.
