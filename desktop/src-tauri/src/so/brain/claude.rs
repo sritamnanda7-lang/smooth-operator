@@ -89,13 +89,3 @@ impl Provider for ClaudeProvider {
         into_body(ProviderId::Claude, send(call)?).map(|_| ())
     }
 }
-
-// Not wired into the app until increment 5. This reference keeps the item compiled without a dead-code
-// warning and without an allow (strip-check s05). Delete it when the brain builds the providers.
-const _: () = {
-    let _ = CLAUDE_MAX_TOKENS;
-    let _ = ClaudeProvider::new;
-    let _ = <ClaudeProvider as Provider>::id;
-    let _ = <ClaudeProvider as Provider>::ask;
-    let _ = <ClaudeProvider as Provider>::check_key;
-};

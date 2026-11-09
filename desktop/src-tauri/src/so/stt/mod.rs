@@ -13,7 +13,7 @@ use crate::managers::model::ModelManager;
 use crate::managers::transcription::TranscriptionManager;
 use crate::settings::{get_settings, write_settings, AppSettings, ModelUnloadTimeout};
 use crate::so::hotkey::watcher::TalkSink;
-use crate::so::rules::TranscriptRouter;
+use crate::so::rules::{SlowRouter, TranscriptRouter};
 use crate::so::settings::{self as so_settings, Platform};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
@@ -105,7 +105,10 @@ pub fn setup(app: &AppHandle) {
     // live manager to on-demand so the mic is open only during a talk.
     real::MicModeSwitch::force_on_demand(&**rec.inner());
     let app_for_hotkey = app.clone();
-    let sink = Arc::new(sink::SpeechSink::with_router(
+    let brain = app_brain(app);
+    #[cfg(debug_assertions)]
+    let brain = fake_brain().unwrap_or(brain);
+    let sink = Arc::new(sink::SpeechSink::with_brain(
         Arc::new(real::RealRecorder::new(rec.inner().clone())),
         Arc::new(real::RealTranscriber::new(tr.inner().clone(), models.inner().clone())),
         crate::so::panel::panel_out(app),
@@ -114,10 +117,33 @@ pub fn setup(app: &AppHandle) {
         Arc::new(real::WatcherStopper),
         Box::new(move || so_settings::load_hotkey(&app_for_hotkey, Platform::current())),
         fast_router(app),
+        brain,
     ));
     #[cfg(debug_assertions)]
     start_debug_input(app, &sink);
     let _ = SINK.set(sink);
+}
+
+/// The AI for talks the fast rules pass through (step 4): Claude and Gemini, the key read from the macOS
+/// Keychain on each call, the choice read from our settings file.
+fn app_brain(app: &AppHandle) -> Arc<dyn SlowRouter> {
+    use crate::so::brain::{brain::{Brain, Limits}, claude::ClaudeProvider, config, gemini::GeminiProvider, keys};
+    let app = app.clone();
+    Arc::new(Brain::new(
+        vec![Arc::new(ClaudeProvider::new()), Arc::new(GeminiProvider::new())],
+        Arc::new(keys::KeyringStore::new(keys::service())),
+        Arc::new(move || config::load_choice(&app)),
+        Arc::new(crate::so::hotkey::SystemClock),
+        Arc::new(std::thread::sleep),
+        Limits { max_in_flight: 2, max_per_hour: 120 },
+    ))
+}
+
+/// Debug builds only: `SO_BRAIN_FAKE=1` swaps in the fake provider (no network, no key).
+#[cfg(debug_assertions)]
+fn fake_brain() -> Option<Arc<dyn SlowRouter>> {
+    use crate::so::brain::fake;
+    std::env::var(fake::ENV_FLAG).is_ok_and(|v| v == "1").then(fake::front)
 }
 
 /// The router that handles exact media and open/switch phrases (step 3). Other platforms keep step 2's
@@ -125,12 +151,15 @@ pub fn setup(app: &AppHandle) {
 #[cfg(target_os = "macos")]
 fn fast_router(app: &AppHandle) -> Arc<dyn TranscriptRouter> {
     use crate::so::rules::{real, router::FastRouter};
-    Arc::new(FastRouter::new(
-        Arc::new(real::EnigoMediaKeys::new(app.clone())),
-        Arc::new(real::SystemCatalog),
-        Arc::new(real::OpenLauncher),
-        Arc::new(crate::so::hotkey::SystemClock),
-    ))
+    Arc::new(
+        FastRouter::new(
+            Arc::new(real::EnigoMediaKeys::new(app.clone())),
+            Arc::new(real::SystemCatalog),
+            Arc::new(real::OpenLauncher),
+            Arc::new(crate::so::hotkey::SystemClock),
+        )
+        .not_found_to_brain(),
+    )
 }
 
 #[cfg(not(target_os = "macos"))]

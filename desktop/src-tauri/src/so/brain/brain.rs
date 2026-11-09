@@ -221,14 +221,3 @@ impl SlowRouter for Brain {
         Reply { lines: o.lines, hold_secs: o.hold }
     }
 }
-
-// Not wired into the app until increment 5 (the seam). Keeps the pipeline compiled without a dead-code
-// warning and without an allow (strip-check s05). Delete it when the app builds a `Brain`.
-const _: () = {
-    let limits = Limits { max_in_flight: 0, max_per_hour: 0 };
-    let _ = (limits.max_in_flight, limits.max_per_hour);
-    let _ = Brain::new;
-    let _ = <Brain as SlowRouter>::wants;
-    let _ = <Brain as SlowRouter>::think;
-    let _ = (MIN_WORDS, PLAN_SECS, ERROR_SECS);
-};

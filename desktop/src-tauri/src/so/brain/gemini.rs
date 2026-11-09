@@ -89,13 +89,3 @@ impl Provider for GeminiProvider {
         into_body(ProviderId::Gemini, send(call)?).map(|_| ())
     }
 }
-
-// Not wired into the app until increment 5. This reference keeps the item compiled without a dead-code
-// warning and without an allow (strip-check s05). Delete it when the brain builds the providers.
-const _: () = {
-    let _ = GEMINI_MAX_OUTPUT_TOKENS;
-    let _ = GeminiProvider::new;
-    let _ = <GeminiProvider as Provider>::id;
-    let _ = <GeminiProvider as Provider>::ask;
-    let _ = <GeminiProvider as Provider>::check_key;
-};

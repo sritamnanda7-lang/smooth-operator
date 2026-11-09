@@ -124,4 +124,5 @@ const _: () = {
     let _ = so_brain_check_key;
     let _ = so_brain_open_console;
     let _ = (KeyCheck::Rejected, KeyCheck::LimitReached, KeyCheck::RateLimited, KeyCheck::Offline, KeyCheck::Failed, KeyCheck::NoKey);
+    let _ = <super::gemini::GeminiProvider as super::provider::Provider>::check_key;
 };

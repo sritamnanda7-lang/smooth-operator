@@ -44,8 +44,7 @@ pub fn valid_model(name: &str) -> bool {
     first_ok && name.len() <= 64 && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-')
 }
 
-// Not wired into the app until increment 5 (`load_choice`) and 6 (`save_provider`). Delete it then.
+// Not wired into the app until increment 6 (`save_provider`). Delete it then.
 const _: () = {
-    let _ = load_choice;
     let _ = save_provider;
 };

@@ -64,11 +64,3 @@ const _: () = {
     let _ = PassThrough;
     let _ = DEBUG_INPUT_COMPILED;
 };
-
-// Stub phase: nothing in the app calls these yet (increments 1-6 wire them). This reference keeps them
-// compiled without a dead-code warning and without an allow (strip-check s05).
-const _: () = {
-    std::mem::forget(Reply { lines: Vec::new(), hold_secs: 0 });
-    let _ = <Option<&dyn SlowRouter>>::None;
-    let _ = THINKING_TEXT;
-};
