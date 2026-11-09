@@ -154,10 +154,3 @@ pub fn into_body(provider: ProviderId, a: Answer) -> Result<Vec<u8>, ProviderErr
         Err(map_status(provider, a.status, a.retry_after.as_deref(), &a.body))
     }
 }
-
-// Not wired into the app until increment 4 (the pipeline). Keeps the item compiled without a dead-code
-// warning and without an allow (strip-check s05). Delete it when `brain.rs` calls these.
-const _: () = {
-    let _ = RETRY.max_attempts;
-    let _ = with_retry::<(), fn() -> Result<(), ProviderError>>;
-};

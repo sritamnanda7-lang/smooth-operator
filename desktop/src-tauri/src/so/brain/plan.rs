@@ -502,11 +502,9 @@ pub fn schema_for(_p: ProviderId) -> Value {
     serde_json::from_str(&text).unwrap_or(Value::Null)
 }
 
-
-// Not wired into the app until increment 4 (the pipeline). This reference keeps the pure API compiled
-// without a dead-code warning and without an allow (strip-check s05). Delete it when `brain.rs` calls these.
+// `Blocked` is used by step 7 (safety) and `schema_json` is the documented full schema (checked by tests);
+// neither is called by shipped code yet. This reference keeps them compiled without an allow.
 const _: () = {
-    let _ = (PLAN_VERSION, Risk::Blocked);
-    let _ = (parse, risk_of, action_code, render, schema_json, schema_for);
-    let _ = Reject::code;
+    let _ = Risk::Blocked;
+    let _ = schema_json;
 };

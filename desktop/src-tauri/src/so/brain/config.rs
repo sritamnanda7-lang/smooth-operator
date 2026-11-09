@@ -1,16 +1,40 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
-//! The provider and model choice, kept in `so_settings.json` (never a key).
+//! The provider and model choice, kept in our own `so_settings.json`. Nothing secret is stored here.
 
 use super::brain::BrainChoice;
-use super::provider::ProviderId;
+use super::provider::{ProviderId, PROVIDERS};
+use crate::so::settings::STORE_PATH;
 use tauri::AppHandle;
+use tauri_plugin_store::StoreExt;
 
-pub fn load_choice(_app: &AppHandle) -> BrainChoice {
-    todo!()
+const PROVIDER_KEY: &str = "brain_provider";
+
+fn model_key(p: ProviderId) -> &'static str {
+    match p {
+        ProviderId::Claude => "brain_model_claude",
+        ProviderId::Gemini => "brain_model_gemini",
+    }
 }
 
-pub fn save_provider(_app: &AppHandle, _p: ProviderId) -> Result<(), String> {
-    todo!()
+/// The chosen provider (the recommended one if nothing valid is saved) and its model: a well-formed
+/// override from the settings file, else the provider's default.
+pub fn load_choice(app: &AppHandle) -> BrainChoice {
+    let store = app.store(crate::portable::store_path(STORE_PATH)).ok();
+    let text = |key: &str| store.as_ref().and_then(|s| s.get(key)).and_then(|v| v.as_str().map(str::to_owned));
+    let provider = text(PROVIDER_KEY)
+        .and_then(|t| serde_json::from_value::<ProviderId>(serde_json::Value::String(t)).ok())
+        .or_else(|| PROVIDERS.iter().find(|p| p.recommended).map(|p| p.id))
+        .unwrap_or(ProviderId::Claude);
+    let default_model = PROVIDERS.iter().find(|p| p.id == provider).map_or("", |p| p.default_model);
+    let model = text(model_key(provider)).filter(|m| valid_model(m)).unwrap_or_else(|| default_model.to_string());
+    BrainChoice { provider, model }
+}
+
+pub fn save_provider(app: &AppHandle, p: ProviderId) -> Result<(), String> {
+    let store = app.store(crate::portable::store_path(STORE_PATH)).map_err(|_| String::from("could not open settings"))?;
+    let value = serde_json::to_value(p).map_err(|_| String::from("could not save settings"))?;
+    store.set(PROVIDER_KEY, value);
+    store.save().map_err(|_| String::from("could not save settings"))
 }
 
 /// `[a-z0-9][a-z0-9.-]{0,63}`; a bad override falls back to the default model.
@@ -20,10 +44,8 @@ pub fn valid_model(name: &str) -> bool {
     first_ok && name.len() <= 64 && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-')
 }
 
-// Stub phase: nothing in the app calls these yet (increments 1-6 wire them). This reference keeps them
-// compiled without a dead-code warning and without an allow (strip-check s05).
+// Not wired into the app until increment 5 (`load_choice`) and 6 (`save_provider`). Delete it then.
 const _: () = {
     let _ = load_choice;
     let _ = save_provider;
-    let _ = valid_model;
 };

@@ -40,10 +40,3 @@ pub fn user_message(transcript: &str) -> String {
 pub fn request(transcript: &str) -> BrainRequest {
     BrainRequest { system: SYSTEM_PROMPT, user: user_message(transcript) }
 }
-
-// Not wired into the app until increment 4 (the pipeline). Keeps the item compiled without a dead-code
-// warning and without an allow (strip-check s05). Delete it when `brain.rs` calls these.
-const _: () = {
-    let _ = (SYSTEM_PROMPT, MAX_TRANSCRIPT_CHARS);
-    let _ = (user_message, request);
-};
