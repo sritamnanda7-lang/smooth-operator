@@ -4,6 +4,11 @@
 # The only model-download host is huggingface.co (our pinned repo; the CDN redirect targets never
 # appear in source). Adding a host needs reviewer + founder OK. One host per line.
 huggingface.co
+# step 4 (brain): the two provider API hosts and the two console hosts (fixed URLs in so/brain/provider.rs)
+api.anthropic.com
+generativelanguage.googleapis.com
+platform.claude.com
+aistudio.google.com
 # local/dev and XML/schema namespaces (not network calls)
 localhost
 127.0.0.1
