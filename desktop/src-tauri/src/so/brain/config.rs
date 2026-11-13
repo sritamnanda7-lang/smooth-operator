@@ -43,8 +43,3 @@ pub fn valid_model(name: &str) -> bool {
     let first_ok = chars.next().is_some_and(|c| c.is_ascii_lowercase() || c.is_ascii_digit());
     first_ok && name.len() <= 64 && chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '.' || c == '-')
 }
-
-// Not wired into the app until increment 6 (`save_provider`). Delete it then.
-const _: () = {
-    let _ = save_provider;
-};

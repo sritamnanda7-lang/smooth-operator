@@ -3,11 +3,15 @@
 //! functions that take a `&dyn KeyStore`. `so_brain_save_key` is the ONLY inbound key path.
 
 use super::brain::BrainChoice;
-use super::keys::{ApiKey, KeyStore};
-use super::provider::{ProviderId, PROVIDERS};
+use super::claude::ClaudeProvider;
+use super::config;
+use super::gemini::GeminiProvider;
+use super::keys::{self, ApiKey, KeyStore, KeyringStore, MemoryKeyStore};
+use super::provider::{Provider, ProviderError, ProviderId, ProviderInfo, PROVIDERS};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::AppHandle;
+use tauri_plugin_opener::OpenerExt;
 
 #[derive(Debug, Serialize, Type)]
 pub struct ProviderView {
@@ -45,6 +49,7 @@ pub enum ConsolePage {
 /// Fixed texts for the page: never an echo of the input, never an error detail.
 pub const KEY_WRONG_TEXT: &str = "Key looks wrong: paste the whole key";
 pub const KEY_NOT_SAVED_TEXT: &str = "Couldn't save the key";
+pub const KEY_NOT_REMOVED_TEXT: &str = "Couldn't remove the key";
 
 /// Checks the format, then stores the key. The raw text is dropped at once and never echoed.
 pub fn save_key_with(store: &dyn KeyStore, p: ProviderId, raw: String) -> Result<(), String> {
@@ -69,60 +74,92 @@ pub fn status_with(store: &dyn KeyStore, choice: &BrainChoice) -> BrainStatus {
     BrainStatus { provider: choice.provider, providers }
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn so_brain_status(_app: AppHandle) -> BrainStatus {
-    todo!()
+fn info(p: ProviderId) -> Option<&'static ProviderInfo> {
+    PROVIDERS.iter().find(|i| i.id == p)
+}
+
+fn provider_for(p: ProviderId) -> Box<dyn Provider> {
+    match p {
+        ProviderId::Claude => Box::new(ClaudeProvider::new()),
+        ProviderId::Gemini => Box::new(GeminiProvider::new()),
+    }
+}
+
+/// A fresh handle each call: the Keychain is the one source of truth, nothing is cached.
+fn store() -> KeyringStore {
+    KeyringStore::new(keys::service())
+}
+
+/// Maps a provider error to the fixed result shown on the page.
+pub fn key_check_of(e: &ProviderError) -> KeyCheck {
+    match e {
+        ProviderError::KeyInvalid => KeyCheck::Rejected,
+        ProviderError::SpendLimit => KeyCheck::LimitReached,
+        ProviderError::RateLimited { .. } => KeyCheck::RateLimited,
+        ProviderError::Offline | ProviderError::Timeout => KeyCheck::Offline,
+        _ => KeyCheck::Failed,
+    }
+}
+
+/// Check the saved key with one cheap call. Runs on a plain thread (blocking keyring and network).
+fn check_key_with(store: &dyn KeyStore, provider: &dyn Provider) -> KeyCheck {
+    match store.get(provider.id()) {
+        Ok(Some(key)) => provider.check_key(&key).map_or_else(|e| key_check_of(&e), |()| KeyCheck::Ok),
+        Ok(None) => KeyCheck::NoKey,
+        Err(_) => KeyCheck::Failed,
+    }
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn so_brain_set_provider(_app: AppHandle, _provider: ProviderId) -> Result<(), String> {
-    todo!()
+pub async fn so_brain_status(app: AppHandle) -> BrainStatus {
+    let choice = config::load_choice(&app);
+    let fallback = BrainChoice { provider: choice.provider, model: choice.model.clone() };
+    // A panicked task (JoinError) is never shown; the page gets an all-"No key" status.
+    match tauri::async_runtime::spawn_blocking(move || status_with(&store(), &choice)).await {
+        Ok(s) => s,
+        Err(_) => status_with(&MemoryKeyStore::new(), &fallback),
+    }
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn so_brain_set_provider(app: AppHandle, provider: ProviderId) -> Result<(), String> {
+    config::save_provider(&app, provider)
 }
 
 /// The only inbound key path: page to Rust, once, one way. Nothing is sent back.
 #[tauri::command]
 #[specta::specta]
-pub async fn so_brain_save_key(_app: AppHandle, _provider: ProviderId, _key: String) -> Result<(), String> {
-    todo!()
+pub async fn so_brain_save_key(_app: AppHandle, provider: ProviderId, key: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || save_key_with(&store(), provider, key))
+        .await
+        .unwrap_or_else(|_| Err(KEY_NOT_SAVED_TEXT.to_string()))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn so_brain_remove_key(_app: AppHandle, _provider: ProviderId) -> Result<(), String> {
-    todo!()
+pub async fn so_brain_remove_key(_app: AppHandle, provider: ProviderId) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || store().delete(provider).map_err(|_| KEY_NOT_REMOVED_TEXT.to_string()))
+        .await
+        .unwrap_or_else(|_| Err(KEY_NOT_REMOVED_TEXT.to_string()))
 }
 
-/// Key-touching commands are async: keyring and network run inside `spawn_blocking` (increment 6).
+/// Key-touching commands are async: keyring and network run inside `spawn_blocking`.
 #[tauri::command]
 #[specta::specta]
-pub async fn so_brain_check_key(_app: AppHandle, _provider: ProviderId) -> KeyCheck {
-    todo!()
+pub async fn so_brain_check_key(_app: AppHandle, provider: ProviderId) -> KeyCheck {
+    tauri::async_runtime::spawn_blocking(move || check_key_with(&store(), &*provider_for(provider))).await.unwrap_or(KeyCheck::Failed)
 }
 
 /// Rust opens the fixed key or spend-limit URL from `PROVIDERS`; the page passes only the provider id.
 #[tauri::command]
 #[specta::specta]
-pub fn so_brain_open_console(_app: AppHandle, _provider: ProviderId, _page: ConsolePage) -> Result<(), String> {
-    todo!()
+pub fn so_brain_open_console(app: AppHandle, provider: ProviderId, page: ConsolePage) -> Result<(), String> {
+    let i = info(provider).ok_or_else(|| String::from("unknown provider"))?;
+    let url = match page {
+        ConsolePage::Key => i.key_url,
+        ConsolePage::Spend => i.spend_url,
+    };
+    app.opener().open_url(url, None::<String>).map_err(|_| String::from("Couldn't open the page"))
 }
-
-// Stub phase: nothing in the app calls these yet (increments 1-6 wire them). This reference keeps them
-// compiled without a dead-code warning and without an allow (strip-check s05).
-const _: () = {
-    std::mem::forget(ProviderView { id: ProviderId::Claude, label: String::new(), recommended: false, key_saved: false, model: String::new() });
-    std::mem::forget(BrainStatus { provider: ProviderId::Claude, providers: Vec::new() });
-    let _ = KeyCheck::Ok;
-    let _ = (ConsolePage::Key, ConsolePage::Spend);
-    let _ = save_key_with;
-    let _ = status_with;
-    let _ = so_brain_status;
-    let _ = so_brain_set_provider;
-    let _ = so_brain_save_key;
-    let _ = so_brain_remove_key;
-    let _ = so_brain_check_key;
-    let _ = so_brain_open_console;
-    let _ = (KeyCheck::Rejected, KeyCheck::LimitReached, KeyCheck::RateLimited, KeyCheck::Offline, KeyCheck::Failed, KeyCheck::NoKey);
-    let _ = <super::gemini::GeminiProvider as super::provider::Provider>::check_key;
-};

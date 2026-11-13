@@ -5,6 +5,7 @@ import React from "react";
 import { SettingsGroup } from "@/components/ui/SettingsGroup";
 import { MicrophoneSelector } from "@/components/settings/MicrophoneSelector";
 import { ModelSettingsCard } from "@/components/settings/general/ModelSettingsCard";
+import { BrainSection } from "./BrainSection";
 import { FnCheckNotice } from "./FnCheckNotice";
 import { HotkeySetting } from "./HotkeySetting";
 import { STRINGS } from "./strings";
@@ -16,6 +17,7 @@ export const GeneralPane: React.FC = () => (
       <FnCheckNotice />
     </SettingsGroup>
     <ModelSettingsCard />
+    <BrainSection />
     <SettingsGroup title={STRINGS.microphoneGroup}>
       <MicrophoneSelector descriptionMode="tooltip" grouped={true} />
     </SettingsGroup>

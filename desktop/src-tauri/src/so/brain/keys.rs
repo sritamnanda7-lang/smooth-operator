@@ -96,10 +96,13 @@ impl KeyringStore {
 
 /// Maps a Keychain failure to a fixed code. The crate's error text is dropped: it could name the item.
 #[cfg(target_os = "macos")]
-fn map_keyring(e: &keyring::Error) -> KeyError {
+use keyring::Error as Kc;
+
+#[cfg(target_os = "macos")]
+fn map_keyring(e: &Kc) -> KeyError {
     match e {
-        keyring::Error::NoStorageAccess(_) => KeyError::Locked,
-        keyring::Error::PlatformFailure(_) => KeyError::Denied,
+        Kc::NoStorageAccess(_) => KeyError::Locked,
+        Kc::PlatformFailure(_) => KeyError::Denied,
         _ => KeyError::Backend,
     }
 }
@@ -178,16 +181,3 @@ impl KeyStore for MemoryKeyStore {
         Ok(())
     }
 }
-
-// Not wired into the app until increments 4 to 6. Keeps the items compiled without a dead-code warning
-// and without an allow (strip-check s05). Delete it when the brain and the commands use them.
-const _: () = {
-    let _ = ApiKey::parse;
-    let _ = (KeyFormatError::TooShort, KeyFormatError::TooLong, KeyFormatError::BadChars, KeyFormatError::Empty);
-    let _ = (KeyError::Locked, KeyError::Denied, KeyError::Backend);
-    let _ = (SERVICE_RELEASE, service);
-    let _ = (KeyringStore::new, MemoryKeyStore::new);
-    let _ = <KeyringStore as KeyStore>::set;
-    let _ = <KeyringStore as KeyStore>::get;
-    let _ = <KeyringStore as KeyStore>::delete;
-};

@@ -531,6 +531,12 @@ pub fn run(cli_args: CliArgs) {
             so::commands::so_set_hotkey,
             so::commands::so_hotkey_options,
             so::commands::so_fn_check,
+            so::brain::commands::so_brain_status,
+            so::brain::commands::so_brain_set_provider,
+            so::brain::commands::so_brain_save_key,
+            so::brain::commands::so_brain_remove_key,
+            so::brain::commands::so_brain_check_key,
+            so::brain::commands::so_brain_open_console,
         ])
         .events(collect_events![
             managers::transcription::StreamTextEvent,

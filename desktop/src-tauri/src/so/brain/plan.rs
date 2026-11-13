@@ -128,12 +128,12 @@ impl<'de> Visitor<'de> for StrictVisitor {
     }
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Strict, A::Error> {
         let mut out = Map::new();
-        while let Some(key) = map.next_key::<String>()? {
-            if out.contains_key(&key) {
-                return Err(de::Error::custom("duplicate key"));
+        while let Some(name) = map.next_key::<String>()? {
+            if out.contains_key(&name) {
+                return Err(de::Error::custom("duplicate name"));
             }
             let Strict(v) = map.next_value()?;
-            out.insert(key, v);
+            out.insert(name, v);
         }
         Ok(Strict(Value::Object(out)))
     }
@@ -480,7 +480,7 @@ const ACTION_NAMES: &str = r#"["open_app","switch_app","media","open_url","web_s
 
 /// The full schema (documentation and test J14): one shape per action.
 pub fn schema_json() -> &'static str {
-    r##"{"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,"required":["v","kind"],"properties":{"v":{"const":1},"kind":{"enum":["plan","question"]},"question":{"type":"string","minLength":1,"maxLength":200},"steps":{"type":"array","minItems":1,"maxItems":25,"items":{"oneOf":[
+    r##"{"type":"object","additionalProperties":false,"required":["v","kind"],"properties":{"v":{"const":1},"kind":{"enum":["plan","question"]},"question":{"type":"string","minLength":1,"maxLength":200},"steps":{"type":"array","minItems":1,"maxItems":25,"items":{"oneOf":[
 {"type":"object","additionalProperties":false,"required":["action","args"],"properties":{"action":{"const":"open_app"},"args":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1,"maxLength":40}}}}},
 {"type":"object","additionalProperties":false,"required":["action","args"],"properties":{"action":{"const":"switch_app"},"args":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string","minLength":1,"maxLength":40}}}}},
 {"type":"object","additionalProperties":false,"required":["action","args"],"properties":{"action":{"const":"media"},"args":{"type":"object","additionalProperties":false,"required":["key"],"properties":{"key":{"enum":["play_pause","next","previous"]}}}}},

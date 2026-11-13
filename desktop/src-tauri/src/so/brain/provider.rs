@@ -75,21 +75,7 @@ pub trait Provider: Send + Sync {
     fn check_key(&self, key: &ApiKey) -> Result<(), ProviderError>;
 }
 
-// Stub phase: nothing in the app calls these yet (increments 1-6 wire them). This reference keeps them
-// compiled without a dead-code warning and without an allow (strip-check s05).
+// `models` is the documented model list (a later step offers a picker); nothing reads it yet.
 const _: () = {
-    let _ = PROVIDERS;
-    let _ = CLAUDE_API_VERSION;
-    let req = BrainRequest { system: "", user: String::new() };
-    let _ = (req.system, &req.user);
-    std::mem::forget(req);
-    let _ = ProviderError::Offline;
-    let _ = <Option<&dyn Provider>>::None;
-    let info = &PROVIDERS[0];
-    let _ = (info.id, info.label, info.key_url, info.spend_url, info.default_model, info.models, info.recommended);
-    let _ = (
-        ProviderError::KeyInvalid, ProviderError::SpendLimit, ProviderError::Forbidden, ProviderError::NotFound, ProviderError::BadRequest(0),
-        ProviderError::RateLimited { retry_after_s: None }, ProviderError::Server(0), ProviderError::Timeout,
-        ProviderError::TooLarge, ProviderError::BadReply,
-    );
+    let _ = PROVIDERS[0].models;
 };
