@@ -43,8 +43,8 @@ pub fn map_transport(e: &reqwest::Error) -> ProviderError {
     }
 }
 
-/// Runs `f`, retrying once for a timeout, a 429 (if Retry-After is at most `max_retry_after`) and a
-/// 5xx. Never retries anything else. `sleep` is injected so tests do not wait.
+/// Runs `f`, retrying once for a 429 (if Retry-After is at most `max_retry_after`) and a
+/// 5xx. Never retries anything else (a timeout already cost the full wait). `sleep` is injected so tests do not wait.
 pub fn with_retry<T, F: FnMut() -> Result<T, ProviderError>>(
     p: &RetryPolicy,
     sleep: &dyn Fn(Duration),
@@ -60,7 +60,7 @@ pub fn with_retry<T, F: FnMut() -> Result<T, ProviderError>>(
             return Err(err);
         }
         let wait = match &err {
-            ProviderError::Server(_) | ProviderError::Timeout => p.backoff,
+            ProviderError::Server(_) => p.backoff,
             ProviderError::RateLimited { retry_after_s: None } => p.backoff,
             ProviderError::RateLimited { retry_after_s: Some(s) } => {
                 let wait = Duration::from_secs(*s);

@@ -22,7 +22,9 @@ import { STRINGS } from "./strings";
 export const BrainSection: React.FC = () => {
   const [status, setStatus] = useState<BrainStatusView | null>(null);
   const [message, setMessage] = useState("");
+  const [checking, setChecking] = useState(false);
   const field = useRef<HTMLInputElement>(null);
+  const checkingNow = useRef(false); // sync guard: two clicks in one tick see the same render
 
   const refresh = useCallback(async () => {
     try {
@@ -78,10 +80,16 @@ export const BrainSection: React.FC = () => {
   };
 
   const check = async () => {
+    if (checkingNow.current) return;
+    checkingNow.current = true;
+    setChecking(true);
     try {
       setMessage(checkText((await commands.soBrainCheckKey(id)) as BrainKeyCheck));
     } catch {
       setMessage(STRINGS.aiCheckFailed);
+    } finally {
+      checkingNow.current = false;
+      setChecking(false);
     }
   };
 
@@ -126,7 +134,7 @@ export const BrainSection: React.FC = () => {
           <Button size="sm" variant="secondary" onClick={() => void remove()}>
             {STRINGS.aiRemove}
           </Button>
-          <Button size="sm" variant="secondary" onClick={() => void check()}>
+          <Button size="sm" variant="secondary" disabled={checking} onClick={() => void check()}>
             {STRINGS.aiCheck}
           </Button>
           <Button size="sm" variant="secondary" onClick={() => open("Key")}>

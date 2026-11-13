@@ -43,7 +43,7 @@ impl Default for GeminiProvider {
     }
 }
 
-/// The model's text: the parts of the first candidate joined; it must have finished normally.
+/// The model's text: the non-thought parts of the first candidate joined; it must have finished normally.
 fn extract(body: &[u8]) -> Result<String, ProviderError> {
     let v: Value = serde_json::from_slice(body).map_err(|_| ProviderError::BadReply)?;
     let cand = v.get("candidates").and_then(|c| c.get(0)).ok_or(ProviderError::BadReply)?;
@@ -51,7 +51,11 @@ fn extract(body: &[u8]) -> Result<String, ProviderError> {
         return Err(ProviderError::BadReply);
     }
     let parts = cand.get("content").and_then(|c| c.get("parts")).and_then(Value::as_array).ok_or(ProviderError::BadReply)?;
-    let text: String = parts.iter().filter_map(|p| p.get("text").and_then(Value::as_str)).collect();
+    let text: String = parts
+        .iter()
+        .filter(|p| p.get("thought").and_then(Value::as_bool) != Some(true))
+        .filter_map(|p| p.get("text").and_then(Value::as_str))
+        .collect();
     if text.is_empty() {
         return Err(ProviderError::BadReply);
     }

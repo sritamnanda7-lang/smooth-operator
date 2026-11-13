@@ -174,7 +174,7 @@ pub fn parse(raw: &str) -> Result<BrainOutput, Reject> {
             }
             only_keys(&top, &["v", "kind", "question"])?;
             match top.get("question").and_then(Value::as_str) {
-                Some(q) if (1..=200).contains(&q.chars().count()) => Ok(BrainOutput::Question(q.to_string())),
+                Some(q) if (1..=200).contains(&q.chars().count()) && !q.chars().any(hidden) => Ok(BrainOutput::Question(q.to_string())),
                 _ => Err(Reject::QuestionBad),
             }
         }
@@ -257,9 +257,17 @@ fn parse_action(name: Option<&Value>, args: Option<&Value>) -> Result<Action, Re
 /// A required string of 1..=max characters with no control characters.
 fn text_arg(args: &Map<String, Value>, key: &str, max: usize) -> Result<String, Reject> {
     match args.get(key) {
-        Some(Value::String(s)) if (1..=max).contains(&s.chars().count()) && !s.chars().any(char::is_control) => Ok(s.clone()),
+        Some(Value::String(s)) if (1..=max).contains(&s.chars().count()) && !s.chars().any(hidden) => Ok(s.clone()),
         _ => Err(Reject::BadArgs),
     }
+}
+
+/// Control (Cc) or invisible format/separator (Cf, Zl, Zp) characters: bidi overrides, zero-width, U+2028/2029.
+/// A fixed list of the Cf/Zl/Zp characters in common use (not the whole Unicode table).
+fn hidden(c: char) -> bool {
+    c.is_control()
+        || matches!(c, '\u{AD}' | '\u{61C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}'
+            | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{206F}' | '\u{FEFF}' | '\u{FFF9}'..='\u{FFFB}')
 }
 
 /// An optional whole number in `lo..=hi`. Present but wrong (text, float, negative, null) = reject.
@@ -276,8 +284,9 @@ fn opt_number(args: &Map<String, Value>, key: &str, lo: u64, hi: u64) -> Result<
 const WEEKDAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 fn date_arg(s: &str) -> Result<String, Reject> {
-    if s == "today" || s == "tomorrow" || WEEKDAYS.contains(&s) {
-        return Ok(s.to_string());
+    let lower = s.to_ascii_lowercase();
+    if lower == "today" || lower == "tomorrow" || WEEKDAYS.contains(&lower.as_str()) {
+        return Ok(lower);
     }
     let b = s.as_bytes();
     let digits = |r: std::ops::Range<usize>| b[r].iter().all(u8::is_ascii_digit);
@@ -352,7 +361,7 @@ fn url_arg(v: Option<&Value>) -> Result<String, Reject> {
     let Some(Value::String(url)) = v else {
         return Err(Reject::BadArgs);
     };
-    if url.chars().count() > 2048 || url.chars().any(|c| c.is_control() || c.is_whitespace()) {
+    if url.chars().count() > 2048 || url.chars().any(|c| hidden(c) || c.is_whitespace()) {
         return Err(Reject::BadArgs);
     }
     let rest = url.strip_prefix("https:").and_then(|r| r.strip_prefix("//")).ok_or(Reject::BadArgs)?;
@@ -361,13 +370,23 @@ fn url_arg(v: Option<&Value>) -> Result<String, Reject> {
         Some((h, p)) => (h, Some(p)),
         None => (authority, None),
     };
-    let host_ok = !host.is_empty() && host.chars().all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-');
+    let host_ok = host_ok(host);
     let port_ok = port.is_none_or(|p| !p.is_empty() && p.len() <= 5 && p.bytes().all(|b| b.is_ascii_digit()));
     if host_ok && port_ok {
         Ok(url.clone())
     } else {
         Err(Reject::BadArgs)
     }
+}
+
+/// A real DNS name: at most 253 characters, at least two labels of 1..=63 letters, digits or `-`, and
+/// not an IP address (last label all digits) or `localhost`. Empty labels (leading, trailing or double dot) fail.
+fn host_ok(host: &str) -> bool {
+    let labels: Vec<&str> = host.split('.').collect();
+    host.len() <= 253
+        && labels.len() >= 2
+        && labels.iter().all(|l| (1..=63).contains(&l.len()) && l.chars().all(|c| c.is_ascii_alphanumeric() || c == '-'))
+        && !labels.last().is_some_and(|l| l.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// Splits "host:port/path?query#frag" into ("host:port", "/path?query#frag").
@@ -410,7 +429,7 @@ const URL_PATH_CHARS: usize = 40;
 /// `prefix + body + suffix`, at most 200 characters: only the body is cut (with `…`), so a closing
 /// "(needs your OK)" always survives. Control characters become spaces.
 fn fit(prefix: &str, body: &str, suffix: &str) -> String {
-    let clean = |s: &str| s.chars().map(|c| if c.is_control() { ' ' } else { c }).collect::<String>();
+    let clean = |s: &str| s.chars().map(|c| if hidden(c) { ' ' } else { c }).collect::<String>();
     let (prefix, body, suffix) = (clean(prefix), clean(body), clean(suffix));
     let room = MAX_LINE_CHARS.saturating_sub(prefix.chars().count() + suffix.chars().count());
     let body = if body.chars().count() <= room {
@@ -439,6 +458,12 @@ fn step_line(a: &Action) -> String {
         Action::OpenUrl { url } => {
             let rest = url.strip_prefix("https:").and_then(|r| r.strip_prefix("//")).unwrap_or(url);
             let (host, path) = split_authority(rest);
+            let room = MAX_LINE_CHARS - "Open: ".len();
+            if host.chars().count() > room {
+                // Too long to show whole: keep the END (the registrable domain), drop the path.
+                let tail: String = host.chars().rev().take(room - 1).collect::<Vec<_>>().into_iter().rev().collect();
+                return fit("Open: ", &format!("…{tail}"), "");
+            }
             let path: String = path.chars().take(URL_PATH_CHARS).collect();
             fit("Open: ", &format!("{host}{path}"), "")
         }
