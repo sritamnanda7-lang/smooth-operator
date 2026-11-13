@@ -255,6 +255,37 @@ fn j8_open_url_only_plain_https_with_a_host() {
     ] {
         bad_args(&url(bad));
     }
+    // host rules: host <= 253 chars, labels 1-63, at least one dot, no IP literal, no localhost
+    let host_of = |n: usize| {
+        let (l63, last) = ("a".repeat(63), "a".repeat(n - 3 * 64));
+        format!("{l63}.{l63}.{l63}.{last}")
+    };
+    assert_eq!(host_of(253).len(), 253);
+    assert!(parse(&url(&format!("https://{}/x", host_of(253)))).is_ok(), "a 253-char host is allowed");
+    bad_args(&url(&format!("https://{}/x", host_of(254))));
+    assert!(parse(&url(&format!("https://{}.com", "a".repeat(63)))).is_ok(), "a 63-char label is allowed");
+    bad_args(&url(&format!("https://{}.com", "a".repeat(64))));
+    for bad in [
+        "https://localhost",
+        "https://localhost/x",
+        "https://localhost:8080/",
+        "https://intranet",
+        "https://printer/status",
+        "https://127.0.0.1/",
+        "https://10.0.0.1:8443/x",
+        "https://192.168.1.1",
+        "https://8.8.8.8/",
+        "https://[::1]/",
+        "https://[2001:db8::1]:443/",
+        "https://example.com./",
+        "https://.example.com",
+        "https://a..example.com",
+        "https://exa mple.com",
+        "https://example.com/a\u{202E}b",
+        "https://example.com/a\u{200B}b",
+    ] {
+        bad_args(&url(bad));
+    }
     let long = |n: usize| format!("https://example.com/{}", "a".repeat(n - "https://example.com/".len()));
     assert!(parse(&url(&long(2048))).is_ok(), "2,048 chars is allowed");
     bad_args(&url(&long(2049)));
@@ -271,6 +302,9 @@ fn j9_calendar_title_date_time_minutes_guests_on_both_sides_of_each_limit() {
     // date: today / tomorrow / weekday / YYYY-MM-DD
     for d in ["today", "tomorrow", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "2026-11-09", "2027-02-28"] {
         assert!(parse(&cal(json!({"date": d}))).is_ok(), "{d}");
+    }
+    for d in ["Monday", "TUESDAY", "wEdNeSdAy", "Sunday"] {
+        assert!(parse(&cal(json!({"date": d}))).is_ok(), "weekday names are case-insensitive: {d}");
     }
     for d in ["", "yesterday", "next week", "funday", "2026-13-01", "2026-00-10", "2026-11-32", "2026-1-5", "11/09/2026", "2026-11-09T10:00"] {
         bad_args(&cal(json!({"date": d})));
@@ -316,6 +350,35 @@ fn j9_calendar_title_date_time_minutes_guests_on_both_sides_of_each_limit() {
 }
 
 // ---------- J10 ----------
+/// Unicode format and line/paragraph separators (Cf, Zl, Zp): bidi overrides and isolates, zero-width, U+2028/2029.
+const FORMAT_CHARS: [char; 17] = [
+    '\u{202A}', '\u{202B}', '\u{202C}', '\u{202D}', '\u{202E}', '\u{2066}', '\u{2067}', '\u{2068}', '\u{2069}', '\u{200B}',
+    '\u{200C}', '\u{200D}', '\u{FEFF}', '\u{2028}', '\u{2029}', '\u{200E}', '\u{200F}',
+];
+
+#[test]
+fn j10_a_docs_topic_ending_in_a_right_to_left_override_is_rejected() {
+    bad_args(&one("docs_new", json!({"topic": "Essay on the causes of WWII\u{202E}"})));
+    bad_args(&one("docs_new", json!({"topic": "\u{202E}Essay", "words": 300})));
+    assert!(parse(&one("docs_new", json!({"topic": "Essay on the causes of WWII"}))).is_ok(), "positive control");
+}
+
+#[test]
+fn j10_format_characters_are_rejected_in_a_question_too() {
+    let q = |t: &str| json!({"v": 1, "kind": "question", "question": t}).to_string();
+    assert!(parse(&q("Which Hello?")).is_ok(), "positive control");
+    for c in FORMAT_CHARS {
+        assert_eq!(rej(&q(&format!("Which{c} Hello?"))), Reject::QuestionBad, "U+{:04X}", c as u32);
+    }
+}
+
+#[test]
+fn j10_format_characters_are_rejected_in_open_url_and_guests_keep_working() {
+    for c in FORMAT_CHARS {
+        bad_args(&one("open_url", json!({"url": format!("https://example.com/a{c}b")})));
+        bad_args(&one("open_url", json!({"url": format!("https://exam{c}ple.com/")})));
+    }
+}
 #[test]
 fn j10_string_limits_and_control_characters() {
     let limits: [(&str, &str, usize); 6] = [
@@ -342,6 +405,11 @@ fn j10_string_limits_and_control_characters() {
         bad_args(&build(json!(null)));
         for ctl in ["a\nb", "a\tb", "a\u{7}b", "a\u{0}b", "a\rb", "a\u{1b}[31mb"] {
             bad_args(&build(json!(ctl)));
+        }
+        for c in FORMAT_CHARS {
+            bad_args(&build(json!(format!("a{c}b"))));
+            bad_args(&build(json!(format!("topic{c}"))));
+            bad_args(&build(json!(c.to_string())));
         }
     }
     // docs words 50-2000
@@ -400,6 +468,35 @@ fn j11_open_url_line_shows_host_and_at_most_40_chars_of_path() {
     let step_line = l.iter().find(|t| t.starts_with("Open: example.com/")).unwrap_or_else(|| panic!("{l:?}"));
     assert!(!step_line.contains(&"a".repeat(41)), "path not cut to 40: {step_line}");
     assert!(step_line.contains(&"a".repeat(30)), "path cut too short: {step_line}");
+}
+
+fn open_line(url: &str) -> Option<String> {
+    match parse(&one("open_url", json!({"url": url}))) {
+        Ok(out) => Some(lines_of(&out).into_iter().find(|t| t.starts_with("Open: ")).unwrap_or_else(|| panic!("no Open line for {url}"))),
+        Err(_) => None,
+    }
+}
+
+#[test]
+fn j11_open_url_shows_the_host_whole_and_cuts_only_the_path() {
+    let host = format!("{}.{}.example.com", "a".repeat(60), "b".repeat(60));
+    let line = open_line(&format!("https://{host}/{}", "p".repeat(500))).expect("a 134-char host is valid");
+    assert!(line.starts_with(&format!("Open: {host}/")), "host must be whole: {line}");
+    assert!(line.chars().count() <= 200, "{line}");
+}
+
+#[test]
+fn j11_a_long_look_alike_host_never_shows_a_trusted_looking_prefix() {
+    // 180-char label: invalid (label > 63), so it must be rejected.
+    assert!(open_line(&format!("https://www.youtube.com.{}.evil.com/", "a".repeat(180))).is_none(), "180-char label must be rejected");
+    // Valid labels but a 253-char host: either rejected, or the line still shows the real registrable domain.
+    let l62 = "c".repeat(62);
+    let host = format!("www.youtube.com.{l62}.{l62}.{l62}.{}.evil.com", "d".repeat(253 - 16 - 3 * 63 - 9 - 1));
+    assert_eq!(host.len(), 253, "test setup");
+    if let Some(line) = open_line(&format!("https://{host}/login")) {
+        assert!(line.contains("evil.com"), "the real domain is cut off: {line}");
+        assert!(line.chars().count() <= 200, "{line}");
+    }
 }
 
 #[test]
@@ -472,10 +569,37 @@ fn j11_render_removes_control_characters_from_actions_built_in_code() {
     }
 }
 
+#[test]
+fn j11_render_replaces_format_characters_in_actions_built_in_code() {
+    let mut steps = vec![];
+    for c in FORMAT_CHARS {
+        steps.push(crate::so::brain::plan::Step { action: Action::WebSearch { query: format!("a{c}b") }, risk: Risk::Safe });
+    }
+    for c in FORMAT_CHARS {
+        for l in render(&BrainOutput::Plan(steps[..1].to_vec())) {
+            assert!(!l.text.contains(c), "U+{:04X} in {:?}", c as u32, l.text);
+        }
+        let one_step = vec![crate::so::brain::plan::Step { action: Action::DocsNew { topic: format!("Essay{c}"), words: None }, risk: Risk::Approve }];
+        for l in render(&BrainOutput::Plan(one_step)) {
+            assert!(!l.text.contains(c), "docs topic: U+{:04X} in {:?}", c as u32, l.text);
+        }
+        let url = vec![crate::so::brain::plan::Step { action: Action::OpenUrl { url: format!("https://example.com/a{c}b") }, risk: Risk::Safe }];
+        for l in render(&BrainOutput::Plan(url)) {
+            assert!(!l.text.contains(c), "url: U+{:04X} in {:?}", c as u32, l.text);
+        }
+        for l in render(&BrainOutput::Question(format!("what{c}now?"))) {
+            assert!(!l.text.contains(c), "question: U+{:04X} in {:?}", c as u32, l.text);
+        }
+    }
+    // The text around the character survives.
+    let l = render(&BrainOutput::Plan(steps[..1].to_vec()));
+    assert!(l.iter().any(|x| x.text.contains('a') && x.text.contains('b')));
+}
+
 // ---------- J12 ----------
 #[test]
 fn j12_hostile_strings_render_as_plain_text_and_the_panel_encoding_keeps_them_inert() {
-    let hostile = "</script><img src=x onerror=alert(1)> \"q\" \\ \u{2028} end";
+    let hostile = "</script><img src=x onerror=alert(1)> \"q\" \\ end";
     let out = plan_of(&one("youtube_play", json!({"query": hostile})));
     let lines = render(&out);
     let shown = lines.iter().find(|l| l.text.starts_with("Play on YouTube: ")).expect("step line");
@@ -483,7 +607,10 @@ fn j12_hostile_strings_render_as_plain_text_and_the_panel_encoding_keeps_them_in
     assert_eq!(shown.text, format!("Play on YouTube: {hostile}"));
     let script = PanelPayload::new(lines).eval_script();
     assert!(!script.contains("</script>"), "raw </script> reached the script text");
-    assert!(!script.contains('\u{2028}'), "raw U+2028 reached the script text");
+    // U+2028/2029 cannot arrive through parse any more; a code-built action still must not carry them raw.
+    let built = BrainOutput::Plan(vec![crate::so::brain::plan::Step { action: Action::WebSearch { query: "x\u{2028}y\u{2029}z\u{202E}".into() }, risk: Risk::Safe }]);
+    let script = PanelPayload::new(render(&built)).eval_script();
+    assert!(!script.contains('\u{2028}') && !script.contains('\u{2029}') && !script.contains('\u{202E}'), "format character reached the script text");
     assert!(script.contains("\\u003c"), "< must be escaped");
 }
 

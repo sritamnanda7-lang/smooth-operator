@@ -162,8 +162,8 @@ fn h5_rate_limit_without_retry_after_retries_once_after_one_second() {
 }
 
 #[test]
-fn h5_server_errors_and_timeouts_retry_once_after_one_second() {
-    for e in [ProviderError::Server(500), ProviderError::Server(503), ProviderError::Server(529), ProviderError::Timeout] {
+fn h5_server_errors_retry_once_after_one_second() {
+    for e in [ProviderError::Server(500), ProviderError::Server(503), ProviderError::Server(529)] {
         let (r, n, s) = run(vec![Err(e.clone()), Ok(7)], &RETRY);
         assert_eq!((r, n, s), (Ok(7), 2, vec![S1]), "{e:?} then ok");
         let (r, n, s) = run(vec![Err(e.clone()), Err(e.clone())], &RETRY);
@@ -188,10 +188,21 @@ fn h5_everything_else_is_tried_exactly_once() {
         ProviderError::Offline,
         ProviderError::TooLarge,
         ProviderError::BadReply,
+        ProviderError::Timeout,
     ] {
         let (r, n, s) = run(vec![Err(e.clone())], &RETRY);
         assert_eq!((r, n, s), (Err(e.clone()), 1, vec![]), "{e:?}");
     }
+}
+
+#[test]
+fn h5_a_timeout_is_never_retried_and_costs_no_extra_wait() {
+    // The 20 s total timeout already passed; a second try would double the worst case to ~41 s.
+    let (r, n, s) = run(vec![Err(ProviderError::Timeout), Ok(7)], &RETRY);
+    assert_eq!((r, n, s), (Err(ProviderError::Timeout), 1, vec![]));
+    // Server error first, then a timeout: the retry happens, the timeout is final.
+    let (r, n, s) = run(vec![Err(ProviderError::Server(500)), Err(ProviderError::Timeout)], &RETRY);
+    assert_eq!((r, n, s), (Err(ProviderError::Timeout), 2, vec![S1]));
 }
 
 #[test]
@@ -334,6 +345,20 @@ fn h9_gemini_reply_text_comes_from_the_parts() {
     let body = json!({"candidates": [{"content": {"parts": [{"text": "{\"v\":1,"}, {"text": "\"kind\":\"question\"}"}]}, "finishReason": "STOP"}]});
     let two = TestServer::json(200, &body.to_string());
     assert_eq!(gem_ask(&two.base()), Ok("{\"v\":1,\"kind\":\"question\"}".to_string()));
+}
+
+#[test]
+fn h9_gemini_thought_parts_are_skipped() {
+    let body = json!({"candidates": [{"content": {"parts": [
+        {"text": "I should answer with a question", "thought": true},
+        {"text": "{\"v\":1,\"kind\":\"question\"}"},
+        {"text": "more hidden reasoning", "thought": true}
+    ]}, "finishReason": "STOP"}]});
+    let srv = TestServer::json(200, &body.to_string());
+    assert_eq!(gem_ask(&srv.base()), Ok("{\"v\":1,\"kind\":\"question\"}".to_string()));
+    let only = json!({"candidates": [{"content": {"parts": [{"text": "thinking", "thought": true}]}, "finishReason": "STOP"}]});
+    let srv = TestServer::json(200, &only.to_string());
+    assert_eq!(gem_ask(&srv.base()), Err(ProviderError::BadReply), "only thought parts = no answer");
 }
 
 #[test]

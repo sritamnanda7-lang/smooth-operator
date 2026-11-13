@@ -28,6 +28,7 @@ type World = {
   check: string;
   saveResult: () => Promise<unknown>;
   saveDelayMs: number;
+  checkDelayMs: number;
   extra: boolean;
 };
 const ok = { status: "ok", data: null };
@@ -42,6 +43,7 @@ function newWorld(over: Partial<World> = {}): World {
     check: "Ok",
     saveResult: async () => ok,
     saveDelayMs: 0,
+    checkDelayMs: 0,
     extra: false,
     ...over,
   };
@@ -122,7 +124,10 @@ async function mount(over: Partial<World> = {}) {
       world.rows.find((x) => x.id === p)!.key_saved = false;
       return ok;
     }),
-    soBrainCheckKey: vi.fn(async () => world.check),
+    soBrainCheckKey: vi.fn(async () => {
+      if (world.checkDelayMs) await tick(world.checkDelayMs);
+      return world.check;
+    }),
     soBrainOpenConsole: vi.fn(async () => ok),
   };
   (globalThis as unknown as { __so: unknown }).__so = { commands: cmds };
@@ -410,6 +415,16 @@ describe("U7 provider switch, Check key, tips", () => {
     await mount({ check: "Rejected" });
     await click(button("Check key"));
     expect(text()).toContain("Key rejected");
+  });
+
+  it("Check key is disabled while a check is in flight and sends one command for a double click", async () => {
+    await mount({ checkDelayMs: 80 });
+    await act(async () => void button("Check key").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    expect(button("Check key").disabled, "Check key must be disabled during the check").toBe(true);
+    await act(async () => void button("Check key").dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })));
+    await flush(100);
+    expect(cmds.soBrainCheckKey).toHaveBeenCalledTimes(1);
+    expect(button("Check key").disabled, "enabled again after the reply").toBe(false);
   });
 
   it("Gemini tips: free-tier human review, restrict the key, spend cap, and what is sent", async () => {

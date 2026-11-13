@@ -207,6 +207,28 @@ fn s02_the_url_scanner_can_fail() {
     assert_eq!(urls_in("\"https://api.anthropic.com/v1/messages\""), vec![("https".to_string(), "api.anthropic.com".to_string())]);
 }
 
+/// Key-in-URL needles found inside the string literals of one line (odd-numbered `"` segments).
+fn key_needles_in_literals(line: &str) -> Vec<&'static str> {
+    let low = line.to_lowercase();
+    let mut out = vec![];
+    for lit in low.split('"').skip(1).step_by(2) {
+        for needle in ["key=", "?key", "&key"] {
+            if lit.contains(needle) && !out.contains(&needle) {
+                out.push(needle);
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn s02_the_key_literal_scanner_can_fail() {
+    assert_eq!(key_needles_in_literals(r#"let u = format!("{base}/v1/models?key={k}");"#), vec!["key=", "?key"]);
+    assert_eq!(key_needles_in_literals(r#"let u = concat!("https://x.test/a", "&key");"#), vec!["&key"]);
+    assert_eq!(key_needles_in_literals(r#"let u = format!("{base}/m?API_KEY={k}");"#), vec!["key="]);
+    assert!(key_needles_in_literals(r#"provider.check_key(&key); h("x-goog-api-key")"#).is_empty(), "a borrow and a header name are not a URL key");
+}
+
 #[test]
 fn s02_the_net_allowlist_has_the_four_provider_and_console_hosts() {
     let allow = read("tests/net-allowlist.txt");
@@ -227,15 +249,9 @@ fn s02_only_the_four_hosts_all_https_and_no_key_in_a_url() {
             }
             found.push(host);
         }
-        let low = l.to_lowercase();
-        // only on lines that build/mention a URL: `provider.check_key(&key)` is a Rust borrow, not a query string
-        if !(low.contains("://") || low.contains("url") || low.contains("uri") || low.contains("query")) {
-            continue;
-        }
-        for needle in ["key=", "?key", "&key", "api_key=", "apikey=", "access_token="] {
-            if low.contains(needle) {
-                bad.push(format!("{f}:{i}: `{needle}` looks like a key in a URL: {}", l.trim()));
-            }
+        // every string literal (format!/concat/plain), not only lines that mention a URL
+        for needle in key_needles_in_literals(&l) {
+            bad.push(format!("{f}:{i}: `{needle}` looks like a key in a URL: {}", l.trim()));
         }
     }
     assert_none("URLs in so/brain that are not https to one of the four hosts, or that carry a key", bad);

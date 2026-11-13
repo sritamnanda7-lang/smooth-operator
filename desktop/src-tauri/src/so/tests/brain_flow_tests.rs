@@ -111,8 +111,12 @@ fn b4_offline_is_one_attempt() {
 }
 
 #[test]
-fn b5_timeout_is_two_attempts_with_a_one_second_wait() {
-    err_case(&BR::new(), ProviderError::Timeout, 2, vec![S1], TIMEOUT);
+fn b5_timeout_is_one_attempt_and_no_wait() {
+    err_case(&BR::new(), ProviderError::Timeout, 1, vec![], TIMEOUT);
+    // Worst case stays one 20 s call: exactly one request and no injected sleep, on both providers.
+    let c = BR::new();
+    c.choose(ProviderId::Claude, "claude-haiku-5-5");
+    err_case(&c, ProviderError::Timeout, 1, vec![], TIMEOUT);
 }
 
 #[test]
@@ -145,7 +149,7 @@ fn b8_server_errors_retry_once_then_say_problems() {
 
 #[test]
 fn b8_a_retry_that_works_shows_the_plan() {
-    for first in [ProviderError::Timeout, ProviderError::Server(503), ProviderError::RateLimited { retry_after_s: Some(1) }] {
+    for first in [ProviderError::Server(503), ProviderError::RateLimited { retry_after_s: Some(1) }] {
         let rig = BR::new();
         rig.gemini.then(Err(first.clone()));
         let r = rig.think(SAY);
