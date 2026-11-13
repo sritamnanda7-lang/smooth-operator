@@ -34,6 +34,8 @@ impl<T> ViaNone for &W<'_, T> {
 macro_rules! dbg_of {
     ($e:expr) => {{
         let w = W(&$e);
+        // `ViaNone::show` is only a fallback of the autoref probe: name the trait so it counts as used.
+        let _ = <&W<'_, ()> as ViaNone>::show;
         (&w).show()
     }};
 }

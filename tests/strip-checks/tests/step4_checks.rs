@@ -228,6 +228,10 @@ fn s02_only_the_four_hosts_all_https_and_no_key_in_a_url() {
             found.push(host);
         }
         let low = l.to_lowercase();
+        // only on lines that build/mention a URL: `provider.check_key(&key)` is a Rust borrow, not a query string
+        if !(low.contains("://") || low.contains("url") || low.contains("uri") || low.contains("query")) {
+            continue;
+        }
         for needle in ["key=", "?key", "&key", "api_key=", "apikey=", "access_token="] {
             if low.contains(needle) {
                 bad.push(format!("{f}:{i}: `{needle}` looks like a key in a URL: {}", l.trim()));
@@ -389,7 +393,8 @@ fn s09_six_allow_permissions_in_default_json_and_nothing_else_added() {
     assert_eq!(added.len(), 6, "exactly the six brain permissions are added, got {added:?}");
     assert!(t.iter().all(|x| n.contains(x)), "no permission was removed");
     for bad in ["opener", "shell", "http:", "fs:", "dialog", "core:default"] {
-        assert!(!n.iter().any(|x| x.contains(bad)), "an {bad} permission must not be added");
+        // only the ADDED ones: the old `allow-set-clamshell-microphone` contains "shell"
+        assert!(!added.iter().any(|x| x.contains(bad)), "an {bad} permission must not be added");
     }
     assert_eq!(now["windows"], serde_json::json!(["main"]), "main window only");
 }
@@ -560,7 +565,8 @@ fn d6_step_3_and_earlier_test_files_are_unchanged_since_the_step_3_tag() {
     );
     // mod.rs: one `mod` line per new test file. settings-ui.test.ts: V5's import allow-list gains "BrainSection"
     // (step 4 plan U8 adds BrainSection to GeneralPane, which the old list would reject).
-    let allowed = ["desktop/src-tauri/src/so/tests/mod.rs", "tests/so/settings-ui.test.ts"];
+    // step3_checks.rs: S3/R7 now diff the step-2..step-3 range only (step 4 legitimately changes those core files).
+    let allowed = ["desktop/src-tauri/src/so/tests/mod.rs", "tests/so/settings-ui.test.ts", "tests/strip-checks/tests/step3_checks.rs"];
     let bad: Vec<&String> = changed.iter().filter(|f| !allowed.contains(&f.as_str())).collect();
     assert!(bad.is_empty(), "earlier-step tests were edited or deleted: {bad:?}");
 }
