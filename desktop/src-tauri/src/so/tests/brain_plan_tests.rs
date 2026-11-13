@@ -491,7 +491,7 @@ fn j11_a_long_look_alike_host_never_shows_a_trusted_looking_prefix() {
     assert!(open_line(&format!("https://www.youtube.com.{}.evil.com/", "a".repeat(180))).is_none(), "180-char label must be rejected");
     // Valid labels but a 253-char host: either rejected, or the line still shows the real registrable domain.
     let l62 = "c".repeat(62);
-    let host = format!("www.youtube.com.{l62}.{l62}.{l62}.{}.evil.com", "d".repeat(253 - 16 - 3 * 63 - 9 - 1));
+    let host = format!("www.youtube.com.{l62}.{l62}.{l62}.{}.evil.com", "d".repeat(253 - 16 - 3 * 63 - 9));
     assert_eq!(host.len(), 253, "test setup");
     if let Some(line) = open_line(&format!("https://{host}/login")) {
         assert!(line.contains("evil.com"), "the real domain is cut off: {line}");
@@ -607,11 +607,11 @@ fn j12_hostile_strings_render_as_plain_text_and_the_panel_encoding_keeps_them_in
     assert_eq!(shown.text, format!("Play on YouTube: {hostile}"));
     let script = PanelPayload::new(lines).eval_script();
     assert!(!script.contains("</script>"), "raw </script> reached the script text");
+    assert!(script.contains("\\u003c"), "< must be escaped");
     // U+2028/2029 cannot arrive through parse any more; a code-built action still must not carry them raw.
     let built = BrainOutput::Plan(vec![crate::so::brain::plan::Step { action: Action::WebSearch { query: "x\u{2028}y\u{2029}z\u{202E}".into() }, risk: Risk::Safe }]);
-    let script = PanelPayload::new(render(&built)).eval_script();
-    assert!(!script.contains('\u{2028}') && !script.contains('\u{2029}') && !script.contains('\u{202E}'), "format character reached the script text");
-    assert!(script.contains("\\u003c"), "< must be escaped");
+    let built_script = PanelPayload::new(render(&built)).eval_script();
+    assert!(!built_script.contains('\u{2028}') && !built_script.contains('\u{2029}') && !built_script.contains('\u{202E}'), "format character reached the script text");
 }
 
 // ---------- J13 ----------
