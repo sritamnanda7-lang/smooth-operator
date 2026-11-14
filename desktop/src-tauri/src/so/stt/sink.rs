@@ -24,7 +24,8 @@ use super::silence::{End, SilenceWatch};
 use super::{HEARD_SECS, MIC_OPEN_AT, MicOpenAt};
 use crate::so::hotkey::session::{Mode, TalkEvent};
 use crate::so::hotkey::watcher::{Clock, TalkSink};
-use crate::so::rules::{metrics as rules_metrics, PassThrough, Route, TranscriptRouter};
+use crate::so::brain::metrics as brain_metrics;
+use crate::so::rules::{metrics as rules_metrics, PassThrough, Route, SlowRouter, TranscriptRouter, THINKING_TEXT};
 use crate::so::panel::{self, Kind, Line, PanelAction, PanelOut, PanelPayload, TaggedPanel};
 use crate::so::settings::HotkeyChoice;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -140,6 +141,8 @@ struct Delivery {
     talk: Arc<AtomicU64>,
     clock: Arc<dyn Clock>,
     router: Arc<dyn TranscriptRouter>,
+    /// The AI for talks the router passes through (step 4); `None` = steps 2 and 3 exactly.
+    brain: Option<Arc<dyn SlowRouter>>,
     panel: Arc<TaggedPanel>,
 }
 
@@ -148,18 +151,43 @@ impl Delivery {
     ///    You must never get an action you cannot see on the panel.
     /// 2. Otherwise `router.route`; the panel shows "Heard: ..." plus the router's lines, then hides
     ///    after `HEARD_SECS`.
+    /// 3. Passed through and the brain wants it (2+ words): "Heard" + "Thinking…" at once, the brain
+    ///    thinks on this same talk thread, and a newer talk by then drops the reply (brain outcome 12);
+    ///    else "Heard" + the reply lines, hidden after the reply's own hold time.
     fn deliver(&self, talk: u64, text: &str, stopped_at: Instant) {
         if self.talk.load(Ordering::SeqCst) > talk {
             let ms = self.clock.now().saturating_duration_since(stopped_at).as_millis() as u64;
             rules_metrics::fast_rule(7, ms);
             return;
         }
-        let mut lines = vec![Line::new(heard_line(text), Kind::Info)];
-        if let Route::Handled(extra) = self.router.route(text, stopped_at) {
-            lines.extend(extra);
+        let heard = Line::new(heard_line(text), Kind::Info);
+        let mut lines = vec![heard.clone()];
+        match self.router.route(text, stopped_at) {
+            Route::Handled(extra) => lines.extend(extra),
+            Route::PassThrough => {
+                if let Some(brain) = self.brain.as_ref().filter(|b| b.wants(text)) {
+                    self.think(brain.as_ref(), talk, text, stopped_at, heard);
+                    return;
+                }
+            }
         }
         self.panel.show(talk, PanelPayload::new(lines));
         schedule_hide(&self.panel, talk);
+    }
+
+    /// The brain's part of `deliver`.
+    fn think(&self, brain: &dyn SlowRouter, talk: u64, text: &str, stopped_at: Instant, heard: Line) {
+        self.panel.show(talk, PanelPayload::new(vec![heard.clone(), Line::new(THINKING_TEXT, Kind::Info)]));
+        let reply = brain.think(text, stopped_at);
+        if self.talk.load(Ordering::SeqCst) > talk {
+            let ms = self.clock.now().saturating_duration_since(stopped_at).as_millis() as u64;
+            brain_metrics::brain(12, 0, ms, 0, 0, 0, &[]);
+            return;
+        }
+        let mut lines = vec![heard];
+        lines.extend(reply.lines);
+        self.panel.show(talk, PanelPayload::new(lines));
+        schedule_hide_after(&self.panel, talk, reply.hold_secs);
     }
 }
 
@@ -191,6 +219,21 @@ impl SpeechSink {
         hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
         router: Arc<dyn TranscriptRouter>,
     ) -> Self {
+        Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, None)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build(
+        recorder: Arc<dyn Recorder>,
+        transcriber: Arc<dyn Transcriber>,
+        panel: Arc<dyn PanelOut>,
+        clock: Arc<dyn Clock>,
+        tap: Arc<dyn SpeechTap>,
+        stopper: Arc<dyn Stopper>,
+        hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
+        router: Arc<dyn TranscriptRouter>,
+        brain: Option<Arc<dyn SlowRouter>>,
+    ) -> Self {
         let (tx, rx) = channel();
         let talk = Arc::new(AtomicU64::new(0));
         let panel = Arc::new(TaggedPanel::new(panel));
@@ -198,6 +241,7 @@ impl SpeechSink {
             talk: talk.clone(),
             clock: clock.clone(),
             router,
+            brain,
             panel: panel.clone(),
         });
         let worker = Worker {
@@ -228,6 +272,22 @@ impl SpeechSink {
             #[cfg(debug_assertions)]
             delivery,
         }
+    }
+
+    /// Same as `with_router`, plus a brain for talks the router passes through (see `Delivery::deliver`).
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_brain(
+        recorder: Arc<dyn Recorder>,
+        transcriber: Arc<dyn Transcriber>,
+        panel: Arc<dyn PanelOut>,
+        clock: Arc<dyn Clock>,
+        tap: Arc<dyn SpeechTap>,
+        stopper: Arc<dyn Stopper>,
+        hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
+        router: Arc<dyn TranscriptRouter>,
+        brain: Arc<dyn SlowRouter>,
+    ) -> Self {
+        Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, Some(brain))
     }
 
     /// Debug builds only: a typed phrase enters as a new talk (talk id +1, `stopped_at` = now), then
@@ -488,9 +548,14 @@ fn one_line(text: &str, kind: Kind) -> PanelPayload {
 
 /// Hide the panel after `HEARD_SECS`. The tagged panel drops it if a newer talk owns the panel.
 fn schedule_hide(panel: &Arc<TaggedPanel>, talk: u64) {
+    schedule_hide_after(panel, talk, HEARD_SECS);
+}
+
+/// Hides the panel for `talk` after `secs` (ignored if a newer talk owns the panel by then).
+fn schedule_hide_after(panel: &Arc<TaggedPanel>, talk: u64, secs: u64) {
     let panel = panel.clone();
     let _ = std::thread::Builder::new().name("so-panel-hide".into()).spawn(move || {
-        std::thread::sleep(Duration::from_secs(HEARD_SECS));
+        std::thread::sleep(Duration::from_secs(secs));
         panel.hide(talk);
     });
 }

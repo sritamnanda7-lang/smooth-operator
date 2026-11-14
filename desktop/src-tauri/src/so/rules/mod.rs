@@ -28,6 +28,24 @@ pub trait TranscriptRouter: Send + Sync {
     fn route(&self, text: &str, stopped_at: Instant) -> Route;
 }
 
+/// What the brain answers: panel lines (shown under "Heard: ...") and how long they stay.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reply {
+    pub lines: Vec<Line>,
+    pub hold_secs: u64,
+}
+
+/// Plug-in point for the AI (step 4): slow, network. Tests plug in fakes.
+pub trait SlowRouter: Send + Sync {
+    /// Fast and pure: the word rule only (2+ words).
+    fn wants(&self, text: &str) -> bool;
+    /// Blocks (network); never panics.
+    fn think(&self, text: &str, stopped_at: Instant) -> Reply;
+}
+
+/// Shown at once while the brain works.
+pub const THINKING_TEXT: &str = "Thinking…";
+
 /// Default router: handles nothing, so step-2 behaviour is unchanged.
 pub struct PassThrough;
 

@@ -75,6 +75,8 @@ fn rules_hits(needles: &[&str], skip: Option<&str>) -> Vec<String> {
 const RULES: &str = "desktop/src-tauri/src/so/rules";
 const SO: &str = "desktop/src-tauri/src/so";
 const BASE_TAG: &str = "step-2";
+// Step 3's own claim = the step-2..step-3 range; later steps are pinned by their own checks.
+const END_TAG: &str = "step-3";
 
 fn git(args: &[&str]) -> std::process::Output {
     Command::new("git").args(args).current_dir(root()).output().expect("run git")
@@ -83,13 +85,13 @@ fn require_tag() {
     let o = git(&["rev-parse", "--verify", "--quiet", &format!("{BASE_TAG}^{{commit}}")]);
     assert!(o.status.success(), "git tag {BASE_TAG} not found: fetch tags (`git fetch --tags`) to run S3/R7");
 }
-/// Paths (relative to the repo root of the app clone) changed since the step-2 tag, within `paths`.
+/// Paths (relative to the repo root of the app clone) changed between the step-2 and step-3 tags, within `paths`.
 fn changed_since_step2(paths: &[&str]) -> Vec<String> {
     require_tag();
     let top = String::from_utf8(git(&["rev-parse", "--show-toplevel"]).stdout).unwrap().trim().to_string();
     let prefix = root().strip_prefix(&top).unwrap().to_string_lossy().to_string();
     let specs: Vec<String> = paths.iter().map(|x| if prefix.is_empty() { x.to_string() } else { format!("{prefix}/{x}") }).collect();
-    let mut a = vec!["diff", "--name-only", BASE_TAG, "--"];
+    let mut a = vec!["diff", "--name-only", BASE_TAG, END_TAG, "--"];
     a.extend(specs.iter().map(String::as_str));
     let o = Command::new("git").args(&a).current_dir(&top).output().unwrap();
     assert!(o.status.success(), "git diff failed: {}", String::from_utf8_lossy(&o.stderr));

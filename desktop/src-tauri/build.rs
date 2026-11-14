@@ -112,6 +112,12 @@ const APP_COMMANDS: CommandNames = &[
     "so_set_hotkey",
     "so_hotkey_options",
     "so_fn_check",
+    "so_brain_status",
+    "so_brain_set_provider",
+    "so_brain_save_key",
+    "so_brain_remove_key",
+    "so_brain_check_key",
+    "so_brain_open_console",
 ];
 
 fn main() {

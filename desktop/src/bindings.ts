@@ -819,6 +819,53 @@ async soHotkeyOptions() : Promise<HotkeyChoice[]> {
  */
 async soFnCheck() : Promise<FnCheckReport> {
     return await TAURI_INVOKE("so_fn_check");
+},
+async soBrainStatus() : Promise<BrainStatus> {
+    return await TAURI_INVOKE("so_brain_status");
+},
+async soBrainSetProvider(provider: ProviderId) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("so_brain_set_provider", { provider }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * The only inbound key path: page to Rust, once, one way. Nothing is sent back.
+ */
+async soBrainSaveKey(provider: ProviderId, key: string) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("so_brain_save_key", { provider, key }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async soBrainRemoveKey(provider: ProviderId) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("so_brain_remove_key", { provider }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+/**
+ * Key-touching commands are async: keyring and network run inside `spawn_blocking`.
+ */
+async soBrainCheckKey(provider: ProviderId) : Promise<KeyCheck> {
+    return await TAURI_INVOKE("so_brain_check_key", { provider });
+},
+/**
+ * Rust opens the fixed key or spend-limit URL from `PROVIDERS`; the page passes only the provider id.
+ */
+async soBrainOpenConsole(provider: ProviderId, page: ConsolePage) : Promise<Result<null, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("so_brain_open_console", { provider, page }) };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
 }
 }
 
@@ -944,6 +991,7 @@ export type BindingResponse = { success: boolean; binding: ShortcutBinding | nul
  * Script applied to Mandarin and Cantonese output. Traditional carries its region
  * (Taiwan vs Hong Kong forms, e.g. 裡/裏) rather than guessing it.
  */
+export type BrainStatus = { provider: ProviderId; providers: ProviderView[] }
 export type ChineseScript = 
 /**
  * Keep whatever script the model produced.
@@ -958,6 +1006,7 @@ export type ChineseScript =
  */
 "traditional_hk"
 export type ClipboardHandling = "dont_modify" | "copy_to_clipboard"
+export type ConsolePage = "Key" | "Spend"
 export type CustomSounds = { start: boolean; stop: boolean }
 export type Dictation = "Ok" | "Warn" | "Unknown"
 export type FnCheckReport = { applies: boolean; globe: Globe; dictation: Dictation; 
@@ -983,6 +1032,7 @@ export type ImplementationChangeResult = { success: boolean;
  * List of binding IDs that were reset to defaults due to incompatibility
  */
 reset_bindings: string[] }
+export type KeyCheck = "Ok" | "Rejected" | "LimitReached" | "RateLimited" | "Offline" | "Failed" | "NoKey"
 export type KeyboardDiagnosticReport = { secure_input_enabled: boolean; culprit_pid: number | null; culprit_name: string | null; 
 /**
  * Counts only — key identity is deliberately never captured.
@@ -1104,6 +1154,11 @@ export type PermissionAccess = "allowed" | "denied" | "unknown"
 /**
  * A retired ONNX model found on disk.
  */
+/**
+ * Which AI service. `snake_case` in JSON: "claude", "gemini".
+ */
+export type ProviderId = "claude" | "gemini"
+export type ProviderView = { id: ProviderId; label: string; recommended: boolean; key_saved: boolean; model: string }
 export type RetiredModel = { id: string; name: string; size_mb: number; replacement_repo: string }
 export type SecureInputStatus = { 
 /**

@@ -22,6 +22,8 @@ pub struct FastRouter {
     apps: Arc<dyn AppCatalog>,
     launcher: Arc<dyn AppLauncher>,
     clock: Arc<dyn Clock>,
+    /// Step 4: an "open X" with no installed match passes through to the brain.
+    not_found_to_brain: bool,
 }
 
 impl FastRouter {
@@ -31,7 +33,14 @@ impl FastRouter {
         launcher: Arc<dyn AppLauncher>,
         clock: Arc<dyn Clock>,
     ) -> Self {
-        FastRouter { media, apps, launcher, clock }
+        FastRouter { media, apps, launcher, clock, not_found_to_brain: false }
+    }
+
+    /// When on, "open X" with no installed match logs outcome 4 and passes through to the brain
+    /// instead of "I couldn't find...". `FastRouter::new` alone keeps the step-3 behaviour.
+    pub fn not_found_to_brain(mut self) -> Self {
+        self.not_found_to_brain = true;
+        self
     }
 
     /// Logs the outcome code and the time from the end of the talk, and returns the panel line.
@@ -66,6 +75,12 @@ impl FastRouter {
                     Ok(()) => self.done(found, stopped_at, Line::new(format!("{verb} {shown}"), Kind::Info)),
                     Err(_) => self.done(failed, stopped_at, Line::new(format!("Couldn't open {shown}"), Kind::Warn)),
                 }
+            }
+            Resolve::NotFound if self.not_found_to_brain => {
+                // Logged as outcome 4 like before, but no line: the brain answers instead.
+                let ms = self.clock.now().saturating_duration_since(stopped_at).as_millis() as u64;
+                metrics::fast_rule(4, ms);
+                Route::PassThrough
             }
             Resolve::NotFound => {
                 self.done(4, stopped_at, Line::new(format!("I couldn't find an app called {shown}"), Kind::Info))
