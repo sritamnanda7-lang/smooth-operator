@@ -406,7 +406,13 @@ fn s09_six_allow_permissions_in_default_json_and_nothing_else_added() {
         assert!(n.contains(w), "default.json must grant {w}");
     }
     let added: Vec<&String> = n.iter().filter(|x| !t.contains(x)).collect();
-    assert_eq!(added.len(), 6, "exactly the six brain permissions are added, got {added:?}");
+    // Step 5 legitimately adds exactly three link permissions on top of the six brain ones (nothing else).
+    let link: Vec<String> = ["so_link_status", "so_link_start_pairing", "so_link_cancel_pairing"].iter().map(|c| format!("allow-{}", c.replace('_', "-"))).collect();
+    for l in &link {
+        assert!(n.contains(l), "default.json must grant {l}");
+    }
+    assert_eq!(added.len(), 9, "exactly the six brain and three link permissions are added, got {added:?}");
+    assert!(added.iter().all(|x| want.contains(x) || link.contains(x)), "an unexpected permission was added: {added:?}");
     assert!(t.iter().all(|x| n.contains(x)), "no permission was removed");
     for bad in ["opener", "shell", "http:", "fs:", "dialog", "core:default"] {
         // only the ADDED ones: the old `allow-set-clamshell-microphone` contains "shell"
