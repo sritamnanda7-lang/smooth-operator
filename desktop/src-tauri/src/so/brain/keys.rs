@@ -81,6 +81,17 @@ fn account(p: ProviderId) -> &'static str {
     }
 }
 
+/// Crate-private Keychain helpers shared with `link/token.rs` (step 5). Stubs until increment 1, where
+/// `KeyringStore` is refactored onto them. Other systems fail closed with `KeyError::Backend`.
+pub(crate) fn keychain_set(_service: &str, _account: &str, _secret: &str) -> Result<(), KeyError> {
+    todo!()
+}
+
+/// A missing item is `Ok(None)`.
+pub(crate) fn keychain_get(_service: &str, _account: &str) -> Result<Option<String>, KeyError> {
+    todo!()
+}
+
 /// The real macOS Keychain (the Mac's password safe), through the `keyring` crate. All calls block, so
 /// callers use `spawn_blocking`. One internal lock makes calls on one store run one at a time.
 pub struct KeyringStore {

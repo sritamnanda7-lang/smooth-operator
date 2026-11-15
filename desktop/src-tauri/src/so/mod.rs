@@ -7,6 +7,7 @@ pub mod brain;
 pub mod commands;
 pub mod fncheck;
 pub mod hotkey;
+pub mod link;
 pub mod panel;
 pub mod rules;
 pub mod settings;

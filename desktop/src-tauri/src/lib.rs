@@ -111,6 +111,11 @@ fn build_console_filter() -> env_filter::Filter {
         }
     }
 
+    // After the RUST_LOG parse so a user directive cannot switch these back on (step 5).
+    for target in so::link::LOG_SILENCED {
+        builder.filter_module(target, log::LevelFilter::Off);
+    }
+
     builder.build()
 }
 
@@ -564,6 +569,9 @@ pub fn run(cli_args: CliArgs) {
                 // key event detail can reach a log (our shortcut code and the crate).
                 .level_for("handy_keys", log::LevelFilter::Info)
                 .level_for("handy_app_lib::shortcut", log::LevelFilter::Info)
+                // Step 5: these libraries log whole messages at Trace; never let them reach any target.
+                .level_for("tungstenite", log::LevelFilter::Off)
+                .level_for("tokio_tungstenite", log::LevelFilter::Off)
                 .max_file_size(500_000)
                 .rotation_strategy(RotationStrategy::KeepOne)
                 .clear_targets()
