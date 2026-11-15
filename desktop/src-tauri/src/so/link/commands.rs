@@ -2,7 +2,8 @@
 //! The 3 IPC commands for Settings -> General -> Chrome extension (main window only). Thin wrappers
 //! over `Link`. No command ever returns the token. Registered in increment 4.
 
-use super::pairing::PairingView;
+use super::pairing::{PairError, PairingView};
+use super::PORT_BUSY_TEXT;
 use super::server::Link;
 use serde::Serialize;
 use specta::Type;
@@ -33,8 +34,12 @@ pub async fn so_link_status(_app: AppHandle) -> LinkStatus {
 
 /// Pure core of `so_link_start_pairing` so tests can reach it without an `AppHandle`: maps `PairError` to
 /// the fixed texts "Too many wrong codes. Try again in N s." / `PORT_BUSY_TEXT` (and one fixed text for Rng).
-pub fn start_pairing_with(_link: &Link) -> Result<PairingView, String> {
-    todo!()
+pub fn start_pairing_with(link: &Link) -> Result<PairingView, String> {
+    link.start_pairing().map_err(|e| match e {
+        PairError::Locked { secs } => format!("Too many wrong codes. Try again in {secs} s."),
+        PairError::PortBusy => PORT_BUSY_TEXT.to_string(),
+        PairError::Rng => "Could not make a secure code. Try again.".to_string(),
+    })
 }
 
 /// Errors are fixed texts: "Too many wrong codes. Try again in N s." or `PORT_BUSY_TEXT`.

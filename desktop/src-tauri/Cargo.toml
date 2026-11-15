@@ -50,7 +50,7 @@ anyhow = "1.0.95"
 hound = "3.5.1"
 log = "0.4.25"
 env_filter = "0.1.0"
-tokio = { version = "1.43.0", features = ["process", "net", "time"] }
+tokio = { version = "1.43.0", features = ["process", "net", "time", "rt", "sync", "macros", "io-util"] }
 # Step 5 (Chrome extension link): local WebSocket server, server side only (no TLS, no client connect).
 tokio-tungstenite = { version = "=0.29.0", default-features = false, features = ["handshake"] }
 subtle = "2.6"
