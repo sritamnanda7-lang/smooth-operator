@@ -26,7 +26,8 @@ describe("V5 GeneralPane imports", () => {
     "react",
     "HotkeySetting",
     "FnCheckNotice",
-    "BrainSection", // step 4: the AI group (draft/step-4-plan.md U8); the only addition to this list
+    "BrainSection", // step 4: the AI group (draft/step-4-plan.md U8)
+    "LinkSection", // step 5: the Chrome extension group (draft/step-5-plan.md U5); the only addition in step 5
     "fnCheckView",
     "strings",
     "MicrophoneSelector",

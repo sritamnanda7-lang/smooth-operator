@@ -307,6 +307,7 @@ path = [
   "desktop/src-tauri/resources/tray_transcribing_dark.png",
   "package.json",
   "tests/strip-checks/Cargo.lock",
+  "chrome-extension/**",
 ]
 precedence = "aggregate"
 SPDX-FileCopyrightText = "Copyright 2026 Sritam Nanda"
