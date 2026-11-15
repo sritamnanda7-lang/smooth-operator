@@ -3,6 +3,7 @@
 //! over `Link`. No command ever returns the token. Registered in increment 4.
 
 use super::pairing::PairingView;
+use super::server::Link;
 use serde::Serialize;
 use specta::Type;
 use tauri::AppHandle;
@@ -27,6 +28,12 @@ pub struct LinkStatus {
 #[tauri::command]
 #[specta::specta]
 pub async fn so_link_status(_app: AppHandle) -> LinkStatus {
+    todo!()
+}
+
+/// Pure core of `so_link_start_pairing` so tests can reach it without an `AppHandle`: maps `PairError` to
+/// the fixed texts "Too many wrong codes. Try again in N s." / `PORT_BUSY_TEXT` (and one fixed text for Rng).
+pub fn start_pairing_with(_link: &Link) -> Result<PairingView, String> {
     todo!()
 }
 
@@ -55,6 +62,7 @@ const _: () = {
     );
     let status = LinkStatus { state: LinkState::NotPaired, pairing_secs_left: None, locked_secs: None };
     let _ = (status.state, status.pairing_secs_left, status.locked_secs);
+    let _ = start_pairing_with;
     let _ = so_link_status;
     let _ = so_link_start_pairing;
     let _ = so_link_cancel_pairing;
