@@ -88,7 +88,8 @@ fn h4_wrong_host_is_rejected_dns_rebinding() {
 // ---------- H5 ----------
 #[test]
 fn h5_wrong_path_or_any_query_is_rejected() {
-    for p in ["/x", "/?token=abc", "/?", "/ws", "/#x", "/%2F", "/a/b"] {
+    // No "/#x": `http` drops a #fragment while parsing and a browser never sends one; the raw-socket H6 covers real paths.
+    for p in ["/x", "/?token=abc", "/?", "/ws", "/%2F", "/a/b"] {
         match http::Request::builder().uri(p).body(()) {
             // (Some of these may not parse as a URI at all; the ones that do must be refused.)
             Ok(_) => assert_eq!(check(p, Some(&good_host()), Some(ALLOWED_ORIGIN)), Err(HandshakeReject::Path), "path {p:?}"),

@@ -588,13 +588,16 @@ fn d6_step_3_and_earlier_test_files_are_unchanged_since_the_step_3_tag() {
 }
 
 #[test]
-fn d6_the_only_edit_to_settings_ui_test_is_the_one_allow_list_line() {
+fn d6_the_only_edit_to_settings_ui_test_is_the_allow_list_lines_of_steps_4_and_5() {
     require_tag();
-    let o = git_top(&["diff", "--numstat", BASE_TAG, "--", "tests/so/settings-ui.test.ts"]);
+    let o = git_top(&["diff", "-U0", BASE_TAG, "--", "tests/so/settings-ui.test.ts"]);
     let out = String::from_utf8_lossy(&o.stdout).to_string();
-    let mut it = out.split_whitespace();
-    let (add, del) = (it.next().unwrap_or("0"), it.next().unwrap_or("0"));
-    assert_eq!((add, del), ("1", "0"), "settings-ui.test.ts may only gain the BrainSection allow-list line: {out}");
+    let added: Vec<&str> = out.lines().filter(|l| l.starts_with('+') && !l.starts_with("+++")).collect();
+    let removed: Vec<&str> = out.lines().filter(|l| l.starts_with('-') && !l.starts_with("---")).collect();
+    assert!(removed.is_empty(), "settings-ui.test.ts must not lose lines: {removed:?}");
+    assert_eq!(added.len(), 2, "settings-ui.test.ts may only gain the BrainSection and LinkSection allow-list lines: {added:?}");
+    assert!(added[0].contains("\"BrainSection\","), "first added line: {}", added[0]);
+    assert!(added[1].contains("\"LinkSection\","), "second added line: {}", added[1]);
 }
 
 #[test]
