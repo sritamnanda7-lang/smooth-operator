@@ -559,19 +559,22 @@ pub fn run(cli_args: CliArgs) {
 
     let invoke_handler = specta_builder.invoke_handler();
 
+    // Step 5: these libraries log whole messages at Trace; never let them reach any target.
+    let mut log_builder = LogBuilder::new()
+        .level(log::LevelFilter::Trace) // Set to most verbose level globally
+        // Key path: never above Info, even with --debug / Trace, so no
+        // key event detail can reach a log (our shortcut code and the crate).
+        .level_for("handy_keys", log::LevelFilter::Info)
+        .level_for("handy_app_lib::shortcut", log::LevelFilter::Info);
+    for target in so::link::LOG_SILENCED {
+        log_builder = log_builder.level_for(*target, log::LevelFilter::Off);
+    }
+
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .device_event_filter(tauri::DeviceEventFilter::Always)
         .plugin(
-            LogBuilder::new()
-                .level(log::LevelFilter::Trace) // Set to most verbose level globally
-                // Key path: never above Info, even with --debug / Trace, so no
-                // key event detail can reach a log (our shortcut code and the crate).
-                .level_for("handy_keys", log::LevelFilter::Info)
-                .level_for("handy_app_lib::shortcut", log::LevelFilter::Info)
-                // Step 5: these libraries log whole messages at Trace; never let them reach any target.
-                .level_for("tungstenite", log::LevelFilter::Off)
-                .level_for("tokio_tungstenite", log::LevelFilter::Off)
+            log_builder
                 .max_file_size(500_000)
                 .rotation_strategy(RotationStrategy::KeepOne)
                 .clear_targets()

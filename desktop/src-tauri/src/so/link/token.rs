@@ -127,8 +127,11 @@ pub fn nonce_hex(rng: &dyn Rng) -> Result<String, RngError> {
 
 /// HMAC-SHA256 keyed with the 32 raw token bytes over `prefix` + the nonce text.
 fn mac(t: &LinkToken, prefix: &str, nonce_hex: &str) -> Hmac<Sha256> {
-    // new_from_slice accepts any key length, so this cannot fail for 32 bytes.
-    let mut m = Hmac::<Sha256>::new_from_slice(&t.0).unwrap_or_else(|_| unreachable!());
+    // HMAC pads a short key with zeros to the 64-byte block, so this fixed-size key gives the same
+    // result as the 32 raw bytes and cannot fail.
+    let mut key = [0u8; 64];
+    key[..32].copy_from_slice(&t.0);
+    let mut m = Hmac::<Sha256>::new(&key.into());
     m.update(prefix.as_bytes());
     m.update(nonce_hex.as_bytes());
     m

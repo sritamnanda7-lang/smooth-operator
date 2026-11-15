@@ -89,7 +89,7 @@ pub struct Link {
     inner: Mutex<Inner>,
     /// True while a blocking Keychain read runs. `spawn_blocking` cannot be cancelled, so a second auth
     /// is refused at once instead of starting another read.
-    read_in_flight: AtomicBool,
+    read_in_flight: Arc<AtomicBool>,
     /// TCP connections still in their handshake.
     handshakes: AtomicUsize,
     next_id: AtomicUsize,
@@ -126,10 +126,20 @@ impl Drop for HandshakeGuard {
 }
 
 /// Clears `read_in_flight` when the blocking read ends, even if it panics.
-struct ReadFlag(Arc<Link>);
+struct ReadFlag(Arc<AtomicBool>);
+impl ReadFlag {
+    /// Takes the flag, or `None` when a read is already running.
+    fn take(flag: &Arc<AtomicBool>) -> Option<ReadFlag> {
+        if flag.swap(true, Ordering::SeqCst) {
+            None
+        } else {
+            Some(ReadFlag(flag.clone()))
+        }
+    }
+}
 impl Drop for ReadFlag {
     fn drop(&mut self) {
-        self.0.read_in_flight.store(false, Ordering::SeqCst);
+        self.0.store(false, Ordering::SeqCst);
     }
 }
 
@@ -194,13 +204,17 @@ async fn next_ext(ws: &mut Ws, max: usize) -> Got {
             Some(Ok(Message::Binary(_))) => return Got::Bad(CLOSE_BAD_MSG, 23),
             Some(Ok(Message::Ping(_) | Message::Pong(_) | Message::Frame(_))) => continue,
             Some(Err(WsError::Capacity(_))) => return Got::Bad(1009, 24),
+            Some(Err(WsError::Utf8(_))) => return Got::Bad(CLOSE_BAD_MSG, 23),
             Some(Ok(Message::Close(_))) | Some(Err(_)) | None => return Got::Gone,
         }
     }
 }
 
+/// A write to an untrusted peer that never reads must not hold a slot: 1 s at most.
+const WRITE_LIMIT: Duration = Duration::from_secs(1);
+
 async fn send_text(ws: &mut Ws, text: String) -> bool {
-    ws.send(Message::text(text)).await.is_ok()
+    matches!(tokio::time::timeout(WRITE_LIMIT, ws.send(Message::text(text))).await, Ok(Ok(())))
 }
 
 async fn send_state(ws: &mut Ws, s: &AppState) -> bool {
@@ -210,13 +224,16 @@ async fn send_state(ws: &mut Ws, s: &AppState) -> bool {
 /// Sends the Close frame (empty reason), then ends our side and reads what the peer still sends for a
 /// moment, so the close code arrives instead of a connection reset.
 async fn finish(ws: &mut Ws, code: u16) {
-    let frame = CloseFrame { code: CloseCode::from(code), reason: "".into() };
-    let _ = ws.close(Some(frame)).await;
-    let tcp = ws.get_mut();
-    let _ = tcp.shutdown().await;
-    let mut buf = [0u8; 1024];
-    let _ = tokio::time::timeout(Duration::from_millis(300), async {
-        while matches!(tcp.read(&mut buf).await, Ok(n) if n > 0) {}
+    let _ = tokio::time::timeout(WRITE_LIMIT, async {
+        let frame = CloseFrame { code: CloseCode::from(code), reason: "".into() };
+        let _ = ws.close(Some(frame)).await;
+        let tcp = ws.get_mut();
+        let _ = tcp.shutdown().await;
+        let mut buf = [0u8; 1024];
+        let _ = tokio::time::timeout(Duration::from_millis(300), async {
+            while matches!(tcp.read(&mut buf).await, Ok(n) if n > 0) {}
+        })
+        .await;
     })
     .await;
 }
@@ -229,7 +246,7 @@ impl Link {
             clock,
             rng,
             inner: Mutex::new(Inner { pairing: Pairing::new(), pending: false, auth: None, token: TokenState::Unknown, port_busy: false }),
-            read_in_flight: AtomicBool::new(false),
+            read_in_flight: Arc::new(AtomicBool::new(false)),
             handshakes: AtomicUsize::new(0),
             next_id: AtomicUsize::new(1),
         })
@@ -268,6 +285,7 @@ impl Link {
             };
             if self.handshakes.fetch_add(1, Ordering::SeqCst) >= self.cfg.max_handshakes {
                 self.handshakes.fetch_sub(1, Ordering::SeqCst);
+                metrics::link(4, 0, 0);
                 continue;
             }
             tokio::spawn(self.clone().connection(tcp, HandshakeGuard(self.clone())));
@@ -290,21 +308,23 @@ impl Link {
                 TokenState::Exists(true) => LinkState::NotFound,
                 TokenState::Exists(false) => LinkState::NotPaired,
                 TokenState::KeychainError => LinkState::KeychainError,
-                // A read is already running: do not start a second one.
-                TokenState::Unknown if self.read_in_flight.load(Ordering::SeqCst) => LinkState::KeychainError,
-                TokenState::Unknown => match self.tokens.get() {
-                    Ok(t) => {
-                        self.set_token(TokenState::Exists(t.is_some()));
-                        if t.is_some() {
-                            LinkState::NotFound
-                        } else {
-                            LinkState::NotPaired
+                TokenState::Unknown => match ReadFlag::take(&self.read_in_flight) {
+                    // A read is already running: do not start a second one.
+                    None => LinkState::KeychainError,
+                    Some(_flag) => match self.tokens.get() {
+                        Ok(t) => {
+                            self.set_token(TokenState::Exists(t.is_some()));
+                            if t.is_some() {
+                                LinkState::NotFound
+                            } else {
+                                LinkState::NotPaired
+                            }
                         }
-                    }
-                    Err(_) => {
-                        self.set_token(TokenState::KeychainError);
-                        LinkState::KeychainError
-                    }
+                        Err(_) => {
+                            self.set_token(TokenState::KeychainError);
+                            LinkState::KeychainError
+                        }
+                    },
                 },
             }
         };
@@ -387,7 +407,10 @@ impl Link {
                 finish(&mut ws, CLOSE_TIMEOUT).await;
                 return;
             }
-            Ok(Got::Gone) => return,
+            Ok(Got::Gone) => {
+                metrics::link(25, 0, ms());
+                return;
+            }
             Ok(Got::Bad(code, outcome)) => {
                 metrics::link(outcome, code, ms());
                 finish(&mut ws, code).await;
@@ -396,7 +419,6 @@ impl Link {
             Ok(Got::Msg(m)) => m,
         };
         // Pre-auth outcomes share one shape: tell the extension, log, close 4401.
-        let refuse = |state: AppState, outcome: u8| (state, outcome);
         let (state, outcome) = match first.get() {
             ExtMsg::Ping => {
                 metrics::link(23, CLOSE_BAD_MSG, ms());
@@ -412,7 +434,7 @@ impl Link {
                             finish(&mut ws, CLOSE_TIMEOUT).await;
                             return;
                         }
-                        Saved::Failed => refuse(AppState::Rejected, 27),
+                        Saved::Failed => (AppState::Rejected, 27),
                         Saved::Ok(token_hex) => {
                             drop(pending);
                             if send_state(&mut ws, &AppState::Paired { token: token_hex }).await {
@@ -422,10 +444,10 @@ impl Link {
                             return;
                         }
                     },
-                    PairResult::Wrong => refuse(AppState::WrongCode, 11),
-                    PairResult::Locked { secs } => refuse(AppState::Locked { retry_s: secs }, 12),
-                    PairResult::Expired => refuse(AppState::Expired, 13),
-                    PairResult::NotPairing => refuse(AppState::NotPairing, 13),
+                    PairResult::Wrong => (AppState::WrongCode, 11),
+                    PairResult::Locked { secs } => (AppState::Locked { retry_s: secs }, 12),
+                    PairResult::Expired => (AppState::Expired, 13),
+                    PairResult::NotPairing => (AppState::NotPairing, 13),
                 }
             }
             ExtMsg::Auth { proof, cnonce } => match self.read_token(deadline, &nonce, proof, cnonce).await {
@@ -434,8 +456,8 @@ impl Link {
                     finish(&mut ws, CLOSE_TIMEOUT).await;
                     return;
                 }
-                Read::Failed => refuse(AppState::Rejected, 27),
-                Read::Refused => refuse(AppState::Rejected, 21),
+                Read::Failed => (AppState::Rejected, 27),
+                Read::Refused => (AppState::Rejected, 21),
                 Read::Proved(app_proof) => {
                     let (tx, rx) = oneshot::channel();
                     let _auth = self.register(tx);
@@ -457,14 +479,14 @@ impl Link {
     /// Reads the token on the blocking pool and checks the extension's proof there, so the token never
     /// leaves that closure. Only one read exists at a time (`read_in_flight`).
     async fn read_token(self: &Arc<Self>, deadline: tokio::time::Instant, nonce: &str, proof: &str, cnonce: &str) -> Read {
-        if self.read_in_flight.swap(true, Ordering::SeqCst) {
+        let Some(flag) = ReadFlag::take(&self.read_in_flight) else {
             self.set_token(TokenState::KeychainError);
             return Read::Failed;
-        }
+        };
         let link = self.clone();
         let (nonce, proof, cnonce) = (nonce.to_string(), proof.to_string(), cnonce.to_string());
         let job = tokio::task::spawn_blocking(move || {
-            let _flag = ReadFlag(link.clone());
+            let _flag = flag;
             let r = link.tokens.get();
             link.set_token(match &r {
                 Ok(t) => TokenState::Exists(t.is_some()),
@@ -482,6 +504,8 @@ impl Link {
 
     /// Makes and saves a new token. Returns its hex only after the save worked.
     async fn save_new_token(self: &Arc<Self>, deadline: tokio::time::Instant) -> Saved {
+        // shortcut: a save that finishes after the 5 s deadline still rotates the token (the extension never got
+        // it, so the founder clicks Pair again); upgrade if that ever confuses users.
         let Ok(token) = LinkToken::generate(&*self.rng) else { return Saved::Failed };
         let token_hex = token.to_hex();
         let link = self.clone();
@@ -519,7 +543,10 @@ impl Link {
                     finish(ws, 1000).await;
                     return;
                 }
-                Ok(Got::Gone) => return,
+                Ok(Got::Gone) => {
+                    metrics::link(25, 0, ms());
+                    return;
+                }
                 Ok(Got::Bad(code, outcome)) => {
                     metrics::link(outcome, code, ms());
                     finish(ws, code).await;
