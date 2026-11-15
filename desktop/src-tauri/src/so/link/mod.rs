@@ -17,9 +17,9 @@ use tauri::AppHandle;
 /// The one fixed port (plan decision b). No fallback, no random port.
 pub const LINK_PORT: u16 = 47815;
 
-/// PLACEHOLDER: the spike (S0) replaces this with the extension's real Origin (the ID Chrome prints).
-/// Never matches a real extension. The handshake compares the whole string exactly.
-pub const ALLOWED_ORIGIN: &str = "chrome-extension://PLACEHOLDER-REPLACED-BY-SPIKE-S0";
+/// The one allowed Origin: the extension ID Chrome printed in spike S0 (from the self-made manifest `key`).
+/// The handshake compares the whole string exactly. A Web Store ID would change this one line (step 9).
+pub const ALLOWED_ORIGIN: &str = "chrome-extension://annldiclndpcpopgmdmfcdjdeehfdlik";
 
 /// Libraries that must never reach a log: tungstenite writes message text and frame bytes at Trace.
 /// `lib.rs` turns each of these Off in both log builders.
