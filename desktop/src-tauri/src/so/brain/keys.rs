@@ -81,15 +81,33 @@ fn account(p: ProviderId) -> &'static str {
     }
 }
 
-/// Crate-private Keychain helpers shared with `link/token.rs` (step 5). Stubs until increment 1, where
-/// `KeyringStore` is refactored onto them. Other systems fail closed with `KeyError::Backend`.
-pub(crate) fn keychain_set(_service: &str, _account: &str, _secret: &str) -> Result<(), KeyError> {
-    todo!()
+/// Crate-private Keychain helpers shared by `KeyringStore` and `link/token.rs` (step 5). Other systems
+/// fail closed with `KeyError::Backend`. All calls block.
+#[cfg(target_os = "macos")]
+pub(crate) fn keychain_set(service: &str, account: &str, secret: &str) -> Result<(), KeyError> {
+    let entry = keyring::Entry::new(service, account).map_err(|e| map_keyring(&e))?;
+    entry.set_password(secret).map_err(|e| map_keyring(&e))
 }
 
 /// A missing item is `Ok(None)`.
+#[cfg(target_os = "macos")]
+pub(crate) fn keychain_get(service: &str, account: &str) -> Result<Option<String>, KeyError> {
+    let entry = keyring::Entry::new(service, account).map_err(|e| map_keyring(&e))?;
+    match entry.get_password() {
+        Ok(text) => Ok(Some(text)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(map_keyring(&e)),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn keychain_set(_service: &str, _account: &str, _secret: &str) -> Result<(), KeyError> {
+    Err(KeyError::Backend)
+}
+
+#[cfg(not(target_os = "macos"))]
 pub(crate) fn keychain_get(_service: &str, _account: &str) -> Result<Option<String>, KeyError> {
-    todo!()
+    Err(KeyError::Backend)
 }
 
 /// The real macOS Keychain (the Mac's password safe), through the `keyring` crate. All calls block, so
@@ -122,17 +140,11 @@ fn map_keyring(e: &Kc) -> KeyError {
 impl KeyStore for KeyringStore {
     fn set(&self, p: ProviderId, secret: &ApiKey) -> Result<(), KeyError> {
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
-        let entry = keyring::Entry::new(&self.service, account(p)).map_err(|e| map_keyring(&e))?;
-        entry.set_password(secret.expose()).map_err(|e| map_keyring(&e))
+        keychain_set(&self.service, account(p), secret.expose())
     }
     fn get(&self, p: ProviderId) -> Result<Option<ApiKey>, KeyError> {
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
-        let entry = keyring::Entry::new(&self.service, account(p)).map_err(|e| map_keyring(&e))?;
-        match entry.get_password() {
-            Ok(text) => Ok(ApiKey::parse(&text).ok()),
-            Err(keyring::Error::NoEntry) => Ok(None),
-            Err(e) => Err(map_keyring(&e)),
-        }
+        Ok(keychain_get(&self.service, account(p))?.and_then(|text| ApiKey::parse(&text).ok()))
     }
     fn delete(&self, p: ProviderId) -> Result<(), KeyError> {
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
