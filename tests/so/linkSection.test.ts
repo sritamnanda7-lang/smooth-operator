@@ -199,6 +199,17 @@ describe("U2 Pair, the code, Cancel", () => {
     expect(text()).toContain(LINE.Connected);
   });
 
+  it("the code is cleared when a poll says there is no window (pairing_secs_left null) while the local countdown is still running", async () => {
+    await mount({ state: "NotFound" });
+    await click(button("Pair"));
+    await advance(10_000);
+    expect(text()).toContain(CODE);
+    world.pairingStart = null; // the app closed the window (cancelled elsewhere, locked, or used)
+    await advance(2000);
+    expect(pageDump()).not.toContain(CODE);
+    expect(hasButton("Pair")).toBe(true);
+  });
+
   it("the code is cleared when the window expires (120 s)", async () => {
     await mount({ state: "NotFound" });
     await click(button("Pair"));

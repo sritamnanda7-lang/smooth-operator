@@ -7,6 +7,7 @@
 //   chrome.alarms.create(name, info), .clear(name), .get(name), .getAll(), .onAlarm.addListener(fn({name}))
 //   chrome.storage.local.get(keys) / .set(obj) / .remove(keys) / .clear()   (all return Promises)
 //   chrome.storage.onChanged.addListener(fn(changes, areaName))
+//   chrome.runtime.getURL(path)
 // WebSocket: `new WebSocket(url)`; .readyState (0..3), .send(text) (throws unless OPEN), .close(code?), and either
 //   .onopen/.onmessage/.onclose/.onerror = fn  OR  .addEventListener(type, fn). Message events are `{data: text}`.
 // startLink's env = { chrome, WebSocket, crypto, setTimeout, setInterval, clearTimeout, clearInterval }.
@@ -110,6 +111,7 @@ export function makeEnv(opts: { token?: string; id?: string } = {}) {
   const writes: Record<string, unknown>[] = [];
   const removes: unknown[] = [];
   let clears = 0;
+  let setDelay = 0; // storage.local.set applies after this many event-loop ticks (a slow storage)
   const alarmsCreated: { name: string; info: Record<string, unknown> }[] = [];
   const alarmsCleared: string[] = [];
   const onStartup: Handler[] = [];
@@ -127,6 +129,7 @@ export function makeEnv(opts: { token?: string; id?: string } = {}) {
   const chrome = {
     runtime: {
       id,
+      getURL: (path: string) => `chrome-extension://${id}/${path}`,
       onStartup: { addListener: (f: Handler) => void onStartup.push(f) },
       onInstalled: { addListener: (f: Handler) => void onInstalled.push(f) },
       onMessage: { addListener: (f: (typeof onMessage)[number]) => void onMessage.push(f) },
@@ -143,6 +146,7 @@ export function makeEnv(opts: { token?: string; id?: string } = {}) {
       local: {
         get: async (keys?: unknown) => pick(keys),
         set: async (obj: Record<string, unknown>) => {
+          for (let i = 0; i < setDelay; i++) await tick();
           writes.push(JSON.parse(JSON.stringify(obj)));
           const ch: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
           for (const [k, v] of Object.entries(obj)) {
@@ -220,9 +224,9 @@ export function makeEnv(opts: { token?: string; id?: string } = {}) {
     alarm: (name: string) => onAlarm.forEach((f) => f({ name })),
     message: (msg: unknown, sender: unknown) => onMessage.map((f) => f(msg, sender, () => {})),
     /** A message from the extension's own popup. */
-    popup: (msg: unknown) => onMessage.map((f) => f(msg, { id }, () => {})),
+    popup: (msg: unknown) => onMessage.map((f) => f(msg, { id, url: `chrome-extension://${id}/popup.html` }, () => {})),
   };
-  return { env, id, store, writes, removes, clears: () => clears, alarmsCreated, alarmsCleared, sockets, timers, emit };
+  return { env, id, setSetDelay: (n: number) => void (setDelay = n), store, writes, removes, clears: () => clears, alarmsCreated, alarmsCleared, sockets, timers, emit };
 }
 export type Rig = ReturnType<typeof makeEnv>;
 

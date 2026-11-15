@@ -136,6 +136,24 @@ describe("E5 pairing, then the normal auth path", () => {
     expect(s1.sentOf("ping").length, "not before the 20 s are up").toBe(2);
   });
 
+  it("paired then an immediate close 4000 with a slow storage.set still ends CONNECTED and never shows REJECTED or APP_NOT_FOUND", async () => {
+    const r = await boot();
+    const s0 = await pairWith(r, "123456", null);
+    r.setSetDelay(5);
+    s0.serverSend(status({ state: "paired", token: NEW_TOKEN }));
+    s0.serverClose(4000); // the app closes right after `paired`, in the same tick
+    await until(() => r.sockets.length === 2, "the reconnect after pairing");
+    await authenticate(r.sockets[1], NEW_TOKEN, hex64(0x33));
+    await r.timers.advance(0);
+    await settle(30);
+    expect(r.store.token).toBe(NEW_TOKEN);
+    expect(stateOf(r)).toBe(S.CONNECTED);
+    const seen = r.writes.filter((w) => "link" in w).map((w) => (w.link as { state: string }).state);
+    expect(seen, "states ever written to `link`").not.toContain(S.REJECTED);
+    expect(seen).not.toContain(S.APP_NOT_FOUND);
+    expect(r.sockets.length, "one pairing socket and one authenticated socket").toBe(2);
+  });
+
   it("the ping stops when the socket closes", async () => {
     const r = await boot({ token: TOKEN });
     const s = r.sockets[0];
@@ -189,6 +207,22 @@ describe("E5 pairing, then the normal auth path", () => {
     await settle();
     expect(r.sockets.length).toBe(1);
     expect(stateOf(r)).toBe(S.UNPAIRED);
+  });
+
+  it("a valid code in APP_NOT_FOUND starts pairing through the state machine (state PAIRING, pair is sent, no auth)", async () => {
+    const r = await boot({ token: TOKEN });
+    r.sockets[0].refuse();
+    await settle();
+    expect(stateOf(r)).toBe(S.APP_NOT_FOUND);
+    r.emit.popup({ t: "pair", code: "123456" });
+    await until(() => r.sockets.length === 2, "a pairing socket");
+    expect(stateOf(r)).toBe(S.PAIRING);
+    const s = r.sockets[1];
+    await openAndHello(s, hex64(0x22));
+    await until(() => s.sentOf("pair").length === 1, "the pair message");
+    expect(s.sentOf("pair")[0]).toEqual({ t: "pair", v: 1, code: "123456" });
+    expect(s.sentOf("auth").length).toBe(0);
+    expect(stateOf(r)).toBe(S.PAIRING);
   });
 
   it("an invalid code (not 6 digits) from the popup sends nothing and opens no socket", async () => {
@@ -362,8 +396,28 @@ describe("E7 runtime messages", () => {
 
   it("the same messages from the extension's own popup work", async () => {
     const r = await boot();
-    r.emit.message({ t: "pair", code: "123456" }, { id: r.id });
+    r.emit.popup({ t: "pair", code: "123456" });
     await until(() => r.sockets.length === 1, "pair from the own popup");
+  });
+
+  it("a sender with a tab, or a url other than popup.html, or no url, or another id is ignored (step 6 content scripts share the id)", async () => {
+    const popupUrl = (id: string) => `chrome-extension://${id}/popup.html`;
+    const r = await boot();
+    const senders = [
+      { id: r.id, tab: { id: 5 }, url: popupUrl(r.id) },
+      { id: r.id, url: "https://evil.example/page" },
+      { id: r.id, url: `chrome-extension://${r.id}/sw.js` },
+      { id: r.id, url: popupUrl(r.id) + "x" },
+      { id: r.id },
+      { id: "other", url: popupUrl("other") },
+      { id: "other", url: popupUrl(r.id) },
+    ];
+    for (const sender of senders) r.emit.message({ t: "pair", code: "123456" }, sender);
+    await settle();
+    expect(r.sockets.length, "no socket from any of them").toBe(0);
+    expect(stateOf(r)).toBe(S.UNPAIRED);
+    r.emit.popup({ t: "pair", code: "123456" });
+    await until(() => r.sockets.length === 1, "the real popup is accepted");
   });
 });
 

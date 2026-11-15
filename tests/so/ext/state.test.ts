@@ -6,6 +6,7 @@
 //   connect      open a socket (link.js refuses if one is CONNECTING or OPEN)
 //   send_pair    send {"t":"pair","v":1,"code":<the submitted code>} on the current socket
 //   send_auth    compute the proof for the hello nonce and send auth on the current socket
+//   (paired: close FIRST so the old socket's late close event cannot reach the state machine, then save_token, then connect)
 //   save_token   write the paired token to storage.local under `token`
 //   close        close the current socket
 //   retry_quick  schedule a reconnect with backoff.delayFor(attempt) (null = wait for the alarm)
@@ -38,7 +39,7 @@ const EVENTS: Ev[] = [
 ];
 const STATES = Object.values(S) as string[];
 const LIVE = [S.PAIRING, S.CONNECTING, S.CONNECTED] as string[];
-const CODE_OK = [S.UNPAIRED, S.REJECTED, S.WRONG_CODE, S.EXPIRED] as string[];
+const CODE_OK = [S.UNPAIRED, S.REJECTED, S.WRONG_CODE, S.EXPIRED, S.APP_NOT_FOUND] as string[];
 const REJ = { state: S.REJECTED, effects: ["close"] };
 
 /** The oracle: written from the plan's behaviour text, independent of the implementation. */
@@ -62,7 +63,7 @@ function expected(state: string, ev: Ev): { state: string; effects: string[] } {
     case "authOk":
       return state === S.CONNECTING ? { state: S.CONNECTED, effects: ["start_ping"] } : REJ;
     case "paired":
-      return state === S.PAIRING ? { state: S.CONNECTING, effects: ["save_token", "close", "connect"] } : REJ;
+      return state === S.PAIRING ? { state: S.CONNECTING, effects: ["close", "save_token", "connect"] } : REJ;
     case "wrongCode":
       return state === S.PAIRING ? { state: S.WRONG_CODE, effects: ["close"] } : REJ;
     case "locked":
