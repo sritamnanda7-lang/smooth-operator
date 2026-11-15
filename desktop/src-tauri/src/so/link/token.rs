@@ -49,8 +49,8 @@ fn unhex32(s: &str) -> Option<[u8; 32]> {
         _ => None,
     };
     let mut out = [0u8; 32];
-    for (o, pair) in out.iter_mut().zip(s.chunks_exact(2)) {
-        *o = (nib(pair[0])? << 4) | nib(pair[1])?;
+    for (i, o) in out.iter_mut().enumerate() {
+        *o = (nib(s[2 * i])? << 4) | nib(s[2 * i + 1])?;
     }
     Some(out)
 }
