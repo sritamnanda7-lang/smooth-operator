@@ -21,8 +21,23 @@ pub enum HandshakeReject {
 }
 
 /// Pure checks, in order: path, Host, Origin. (Slots are checked by the session code.)
-pub fn check_handshake(_req: &Request, _cfg: &LinkConfig, _port: u16) -> Result<(), HandshakeReject> {
-    todo!()
+pub fn check_handshake(req: &Request, cfg: &LinkConfig, port: u16) -> Result<(), HandshakeReject> {
+    // Path exactly "/" and no query (even an empty one), so a token can never ride in the URL.
+    if req.uri().path() != "/" || req.uri().query().is_some() {
+        return Err(HandshakeReject::Path);
+    }
+    // Exactly one Host header, byte for byte "127.0.0.1:<bound port>" (stops DNS rebinding).
+    let want_host = format!("127.0.0.1:{port}");
+    let mut hosts = req.headers().get_all("host").iter();
+    if !matches!((hosts.next(), hosts.next()), (Some(h), None) if h.as_bytes() == want_host.as_bytes()) {
+        return Err(HandshakeReject::Host);
+    }
+    // Exactly one Origin header, byte for byte the allowed one. Missing, "null" or duplicated = refused.
+    let mut origins = req.headers().get_all("origin").iter();
+    if !matches!((origins.next(), origins.next()), (Some(o), None) if o.as_bytes() == cfg.allowed_origin.as_bytes()) {
+        return Err(HandshakeReject::Origin);
+    }
+    Ok(())
 }
 
 /// Holds the pairing window, the slots (drop guard), the Keychain read-in-flight flag and whether a
