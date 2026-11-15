@@ -25,7 +25,7 @@ export function startLink(env) {
 
   const persist = () => {
     const snapshot = state === S.LOCKED ? { state, retry_s: retryS } : { state };
-    store.set({ link: snapshot }).catch(() => {});
+    chrome.storage.local.set({ link: snapshot }).catch(() => {});
   };
   const readToken = async () => {
     const got = await store.get("token");
@@ -101,7 +101,7 @@ export function startLink(env) {
           if (cur) void sendAuth(cur, ev.nonce);
           break;
         case "save_token":
-          await store.set({ token: ev.token });
+          await chrome.storage.local.set({ token: ev.token });
           break;
         case "close":
           closeCur();
