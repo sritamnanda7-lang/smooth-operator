@@ -111,7 +111,8 @@ fn build_console_filter() -> env_filter::Filter {
         }
     }
 
-    // After the RUST_LOG parse so a user directive cannot switch these back on (step 5).
+    // After the RUST_LOG parse, so a plain `RUST_LOG=tungstenite=trace` cannot switch these back on. A more
+    // specific directive (`tungstenite::protocol=trace`) still can, for the console only; the file log is unaffected (step 5).
     for target in so::link::LOG_SILENCED {
         builder.filter_module(target, log::LevelFilter::Off);
     }

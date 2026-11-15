@@ -17,11 +17,12 @@ export const S = Object.freeze({
 });
 
 const LIVE = [S.PAIRING, S.CONNECTING, S.CONNECTED];
-const CODE_OK = [S.UNPAIRED, S.REJECTED, S.WRONG_CODE, S.EXPIRED];
+const CODE_OK = [S.UNPAIRED, S.REJECTED, S.WRONG_CODE, S.EXPIRED, S.APP_NOT_FOUND];
 
 /** Events: start{hasToken}, submit{code}, retry, open, hello{nonce}, authOk{proof}, paired{token},
  *  wrongCode, locked{retry_s}, expired, notPairing, rejected, closed, error.
- *  Effects: connect, send_pair, send_auth, save_token, close, retry_quick, start_ping, stop_ping. */
+ *  Effects: connect, send_pair, send_auth, save_token, close, retry_quick, start_ping, stop_ping.
+ *  paired: close FIRST, so the old socket's late close event cannot reach the machine while the token is saved. */
 export function next(state, ev) {
   const to = (s, ...effects) => ({ state: s, effects });
   const reject = () => to(S.REJECTED, "close");
@@ -43,7 +44,7 @@ export function next(state, ev) {
     case "authOk":
       return state === S.CONNECTING ? to(S.CONNECTED, "start_ping") : reject();
     case "paired":
-      return state === S.PAIRING ? to(S.CONNECTING, "save_token", "close", "connect") : reject();
+      return state === S.PAIRING ? to(S.CONNECTING, "close", "save_token", "connect") : reject();
     case "wrongCode":
       return inPairing(to(S.WRONG_CODE, "close"));
     case "locked":

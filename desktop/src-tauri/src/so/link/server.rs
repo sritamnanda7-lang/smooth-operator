@@ -434,6 +434,7 @@ impl Link {
                             finish(&mut ws, CLOSE_TIMEOUT).await;
                             return;
                         }
+                        // A failed random draw also lands here and is logged as outcome 27 (Keychain).
                         Saved::Failed => (AppState::Rejected, 27),
                         Saved::Ok(token_hex) => {
                             drop(pending);

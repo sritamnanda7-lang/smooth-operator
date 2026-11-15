@@ -2,7 +2,7 @@
 // The "Chrome extension" group in our General pane (step 5): status line (polled every 2 s while open),
 // Pair button, the code, Cancel. The code lives only in React state. All text is rendered as React text
 // children (never as HTML); nothing from a reply is shown unless linkView maps it to a fixed text.
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/Button";
 import { SettingsGroup } from "@/components/ui/SettingsGroup";
@@ -24,12 +24,15 @@ export const LinkSection: React.FC = () => {
   const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState("");
 
+  const pairedAt = useRef(0); // when the shown code was made: an older poll must not clear it
   const refresh = useCallback(async () => {
+    const asked = Date.now();
     try {
       const s = (await commands.soLinkStatus()) as LinkStatusView;
       setState(s.state);
-      // Connected, or locked after wrong codes: the code is no longer useful.
-      if (s.state === "Connected" || s.locked_secs !== null) setPairing(null);
+      // Connected, locked after wrong codes, or the app closed the window: the code is no longer useful.
+      const windowClosed = s.pairing_secs_left === null && asked >= pairedAt.current;
+      if (s.state === "Connected" || s.locked_secs !== null || windowClosed) setPairing(null);
     } catch {
       setState("NotFound");
     }
@@ -58,6 +61,7 @@ export const LinkSection: React.FC = () => {
       const r = await commands.soLinkStartPairing();
       if (r.status === "ok") {
         const t = Date.now();
+        pairedAt.current = t;
         setNow(t);
         setPairing({ code: r.data.code, expiresAt: t + r.data.secs_left * 1000 });
       } else {

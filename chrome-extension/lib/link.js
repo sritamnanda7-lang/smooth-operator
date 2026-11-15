@@ -52,7 +52,7 @@ export function startLink(env) {
     if (retryTimer !== null) clearTimeout(retryTimer);
     retryTimer = null;
     const ws = new WebSocket(WS_URL);
-    const rec = { ws, pairing: state === S.PAIRING, pending: code, gotHello: false, sentAuth: false, sentPair: false, expectApp: "" };
+    const rec = { ws, pending: code, gotHello: false, sentAuth: false, sentPair: false, expectApp: "" };
     cur = rec;
     ws.onmessage = (e) => onMessage(rec, e.data);
     ws.onclose = () => onEnd(rec, { type: "closed" });
@@ -195,7 +195,9 @@ export function startLink(env) {
 
   /** Only our own popup, only these two exact shapes. */
   const fromPopup = (msg, sender) => {
-    if (!sender || sender.id !== chrome.runtime.id) return null;
+    if (!sender || sender.id !== chrome.runtime.id || sender.tab) return null;
+    // Later content scripts share our id: only the popup page itself may talk to us.
+    if (sender.url !== chrome.runtime.getURL("popup.html")) return null;
     if (msg === null || typeof msg !== "object" || Array.isArray(msg)) return null;
     const keys = Object.keys(msg).sort().join(",");
     if (msg.t === "pair" && keys === "code,t" && isCode(msg.code)) return msg;
@@ -211,8 +213,6 @@ export function startLink(env) {
   chrome.runtime.onMessage.addListener((msg, sender) => {
     const m = stopped ? null : fromPopup(msg, sender);
     if (m?.t === "pair") {
-      // A dead earlier try (app not found) must not block a new pairing.
-      if (state === S.APP_NOT_FOUND) state = S.UNPAIRED;
       void dispatch({ type: "submit", code: m.code });
     } else if (m?.t === "retry") {
       void readToken().then((token) => dispatch(token === null ? { type: "start", hasToken: false } : { type: "retry" }));
