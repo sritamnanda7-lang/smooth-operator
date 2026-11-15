@@ -133,25 +133,3 @@ impl Pairing {
         self.locked_until?.checked_duration_since(now).filter(|d| !d.is_zero()).map(ceil_secs)
     }
 }
-
-// Stub phase: nothing in the app calls these yet. This reference keeps them compiled without a
-// dead-code warning and without an allow (strip-check s05).
-const _: () = {
-    let _ = (CODE_TTL, MAX_WRONG, LOCK_TIME, MAX_DRAWS);
-    let _ = RngError;
-    let _ = <OsRng as Rng>::fill;
-    let _ = OsRng;
-    let _ = (PairResult::Ok, PairResult::Wrong, PairResult::Expired, PairResult::NotPairing);
-    let _ = PairResult::Locked { secs: 0 };
-    let _ = (PairError::PortBusy, PairError::Rng);
-    let _ = PairError::Locked { secs: 0 };
-    let view = PairingView { code: String::new(), secs_left: 0 };
-    let _ = (&view.code, view.secs_left);
-    std::mem::forget(view);
-    let _ = Pairing::new;
-    let _ = Pairing::start;
-    let _ = Pairing::cancel;
-    let _ = Pairing::try_code;
-    let _ = Pairing::secs_left;
-    let _ = Pairing::locked_secs;
-};

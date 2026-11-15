@@ -2,7 +2,6 @@
 //! Step 5: the link between this app and the Chrome extension: a local WebSocket server on
 //! 127.0.0.1, a pairing code, a Keychain token and a proof handshake. Nothing else travels over
 //! it in step 5. Plan: draft/step-5-plan.md.
-//! Increment 0 = stubs only: bodies are `todo!()` until the tests exist.
 
 pub mod commands;
 pub mod metrics;
@@ -11,8 +10,13 @@ pub mod protocol;
 pub mod server;
 pub mod token;
 
+use crate::so::hotkey::SystemClock;
+use pairing::OsRng;
+use server::Link;
+use std::sync::Arc;
 use std::time::Duration;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
+use token::KeyringTokenStore;
 
 /// The one fixed port (plan decision b). No fallback, no random port.
 pub const LINK_PORT: u16 = 47815;
@@ -49,23 +53,16 @@ pub const LINK: LinkConfig = LinkConfig {
     max_handshakes: 4,
 };
 
-/// Called once from `so::setup` (wired in increment 3): builds the shared `Link`, binds, serves.
-pub fn setup(_app: &AppHandle) {
-    todo!()
+/// Called once from `so::setup`: builds the shared `Link` (managed state for the commands) and starts
+/// listening in the background. A busy port is shown in Settings ("Port busy"), never a crash.
+pub fn setup(app: &AppHandle) {
+    let cfg = LINK;
+    let port = cfg.port;
+    let link = Link::new(cfg, Arc::new(KeyringTokenStore::new(token::service())), Arc::new(SystemClock), Arc::new(OsRng));
+    app.manage(link.clone());
+    tauri::async_runtime::spawn(async move {
+        if let Some(listener) = link.bind(port).await {
+            link.serve(listener).await;
+        }
+    });
 }
-
-// Stub phase: nothing in the app calls these yet (increments 1-5 wire them). This reference keeps them
-// compiled without a dead-code warning and without an allow (strip-check s05).
-const _: () = {
-    let _ = LINK.port;
-    let _ = LINK.allowed_origin;
-    let _ = LINK.auth_timeout;
-    let _ = LINK.idle_timeout;
-    let _ = LINK.max_msg;
-    let _ = LINK.read_buffer;
-    let _ = LINK.max_handshakes;
-    let _ = PORT_BUSY_TEXT;
-    let _ = LOG_SILENCED;
-    let _ = setup;
-    let _ = metrics::link;
-};

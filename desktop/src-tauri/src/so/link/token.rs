@@ -6,6 +6,7 @@ use super::pairing::{Rng, RngError};
 use crate::so::brain::keys::{self, KeyError};
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+#[cfg(test)]
 use std::sync::Mutex;
 
 /// No `Clone`, `Display`, `Serialize` or `specta::Type`; `Debug` prints "LinkToken(<redacted>)".
@@ -97,17 +98,20 @@ impl TokenStore for KeyringTokenStore {
 }
 
 /// In memory only: tests.
+#[cfg(test)]
 #[derive(Default)]
 pub struct MemoryTokenStore {
     item: Mutex<Option<String>>,
 }
 
+#[cfg(test)]
 impl MemoryTokenStore {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
+#[cfg(test)]
 impl TokenStore for MemoryTokenStore {
     fn set(&self, t: &LinkToken) -> Result<(), KeyError> {
         *self.item.lock().unwrap_or_else(|e| e.into_inner()) = Some(t.to_hex());
@@ -137,7 +141,9 @@ fn mac(t: &LinkToken, prefix: &str, nonce_hex: &str) -> Hmac<Sha256> {
     m
 }
 
-/// HMAC-SHA256(token, "so-link-v1|ext|" + nonce), lowercase hex.
+/// HMAC-SHA256(token, "so-link-v1|ext|" + nonce), lowercase hex. The extension makes this proof; the app
+/// only needs it in tests.
+#[cfg(test)]
 pub fn client_proof(t: &LinkToken, nonce_hex: &str) -> String {
     hex(&mac(t, "so-link-v1|ext|", nonce_hex).finalize().into_bytes())
 }
@@ -152,27 +158,3 @@ pub fn verify_client_proof(t: &LinkToken, nonce_hex: &str, proof_hex: &str) -> b
 pub fn server_proof(t: &LinkToken, cnonce_hex: &str) -> String {
     hex(&mac(t, "so-link-v1|app|", cnonce_hex).finalize().into_bytes())
 }
-
-// Stub phase: nothing in the app calls these yet. This reference keeps them compiled without a
-// dead-code warning and without an allow (strip-check s05).
-const _: () = {
-    let t = LinkToken([0; 32]);
-    let _ = t.0;
-    let _ = LinkToken::generate;
-    let _ = LinkToken::from_hex;
-    let _ = LinkToken::to_hex;
-    let _ = <KeyringTokenStore as TokenStore>::set;
-    let _ = <KeyringTokenStore as TokenStore>::get;
-    let _ = <MemoryTokenStore as TokenStore>::set;
-    let _ = <MemoryTokenStore as TokenStore>::get;
-    let _ = (SERVICE_RELEASE, SERVICE_DEBUG, ACCOUNT);
-    let _ = service;
-    let _ = KeyringTokenStore::new;
-    let _ = MemoryTokenStore::new;
-    let _ = nonce_hex;
-    let _ = client_proof;
-    let _ = verify_client_proof;
-    let _ = server_proof;
-    let _ = keys::keychain_set;
-    let _ = keys::keychain_get;
-};

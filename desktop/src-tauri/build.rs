@@ -118,6 +118,9 @@ const APP_COMMANDS: CommandNames = &[
     "so_brain_remove_key",
     "so_brain_check_key",
     "so_brain_open_console",
+    "so_link_status",
+    "so_link_start_pairing",
+    "so_link_cancel_pairing",
 ];
 
 fn main() {

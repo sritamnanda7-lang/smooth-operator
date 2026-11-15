@@ -24,6 +24,7 @@ use tauri::AppHandle;
 pub fn setup(app: &AppHandle) {
     panel::create(app);
     stt::setup(app);
+    link::setup(app);
     let hotkey = settings::load_hotkey(app, Platform::current());
     let report = fncheck::check(&*fncheck::system_env(), hotkey);
     if report.has_problem() {

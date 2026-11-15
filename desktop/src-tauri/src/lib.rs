@@ -542,6 +542,9 @@ pub fn run(cli_args: CliArgs) {
             so::brain::commands::so_brain_remove_key,
             so::brain::commands::so_brain_check_key,
             so::brain::commands::so_brain_open_console,
+            so::link::commands::so_link_status,
+            so::link::commands::so_link_start_pairing,
+            so::link::commands::so_link_cancel_pairing,
         ])
         .events(collect_events![
             managers::transcription::StreamTextEvent,

@@ -169,7 +169,14 @@ struct Shake<'a> {
 impl Callback for Shake<'_> {
     fn on_request(self, req: &Request, response: Response) -> Result<Response, ErrorResponse> {
         let ms = self.t0.elapsed().as_millis() as u64;
-        if let Err(why) = check_handshake(req, &self.link.cfg, self.port) {
+        let verdict = check_handshake(req, &self.link.cfg, self.port).and_then(|()| match self.link.take_pending() {
+            Some(g) => {
+                *self.pending = Some(g);
+                Ok(())
+            }
+            None => Err(HandshakeReject::Busy),
+        });
+        if let Err(why) = verdict {
             let (outcome, status) = match why {
                 HandshakeReject::Path => (5, StatusCode::NOT_FOUND),
                 HandshakeReject::Host => (3, StatusCode::FORBIDDEN),
@@ -178,13 +185,6 @@ impl Callback for Shake<'_> {
             };
             metrics::link(outcome, status.as_u16(), ms);
             return Err(error_response(status));
-        }
-        match self.link.take_pending() {
-            Some(g) => *self.pending = Some(g),
-            None => {
-                metrics::link(4, 409, ms);
-                return Err(error_response(StatusCode::CONFLICT));
-            }
         }
         Ok(response)
     }
@@ -584,16 +584,3 @@ enum Saved {
     Failed,
     Timeout,
 }
-
-// Stub phase: nothing in the app calls these yet. This reference keeps them compiled without a
-// dead-code warning and without an allow (strip-check s05).
-const _: () = {
-    let _ = (HandshakeReject::Path, HandshakeReject::Host, HandshakeReject::Origin, HandshakeReject::Busy);
-    let _ = check_handshake;
-    let _ = Link::new;
-    let _ = Link::bind;
-    let _ = Link::serve;
-    let _ = Link::status;
-    let _ = Link::start_pairing;
-    let _ = Link::cancel_pairing;
-};
