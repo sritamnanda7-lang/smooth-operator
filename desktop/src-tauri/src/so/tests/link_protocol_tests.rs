@@ -80,7 +80,7 @@ fn status_json_shapes() {
     let n = hex(&[7u8; 32]);
     assert_eq!(j(&AppState::Hello { nonce: n.clone() }), serde_json::json!({"t":"status","v":1,"state":"hello","nonce":n}));
     assert_eq!(j(&AppState::AuthOk { proof: proof() }), serde_json::json!({"t":"status","v":1,"state":"auth_ok","proof":proof()}));
-    assert_eq!(j(&AppState::Paired { token: KAT_TOKEN.into() }), serde_json::json!({"t":"status","v":1,"state":"paired","token":KAT_TOKEN}));
+    assert_eq!(j(&AppState::Paired { token: kat_token() }), serde_json::json!({"t":"status","v":1,"state":"paired","token":kat_token()}));
     assert_eq!(j(&AppState::WrongCode), serde_json::json!({"t":"status","v":1,"state":"wrong_code"}));
     assert_eq!(j(&AppState::Locked { retry_s: 60 }), serde_json::json!({"t":"status","v":1,"state":"locked","retry_s":60}));
     assert_eq!(j(&AppState::Expired), serde_json::json!({"t":"status","v":1,"state":"expired"}));

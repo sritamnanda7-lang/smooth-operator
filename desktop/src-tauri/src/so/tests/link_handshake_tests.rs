@@ -112,7 +112,7 @@ fn h5_the_checks_run_in_order_path_then_host_then_origin() {
 // ---------- H6: real socket ----------
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn h6_rejections_return_the_right_http_code_and_never_take_the_pending_slot() {
-    let rig = start(Some(KAT_TOKEN)).await;
+    let rig = start(Some(&kat_token())).await;
     let p = rig.port;
     let host = format!("127.0.0.1:{p}");
     let (c, _) = raw_upgrade(p, "/", Some(&host), Some("https://evil.com")).await;
@@ -140,7 +140,7 @@ async fn h6_rejections_return_the_right_http_code_and_never_take_the_pending_slo
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn h6_a_fifth_concurrent_unfinished_handshake_is_dropped() {
-    let rig = start_with(test_cfg(3000, 5000), TestStore::new(Some(KAT_TOKEN))).await;
+    let rig = start_with(test_cfg(3000, 5000), TestStore::new(Some(&kat_token()))).await;
     let p = rig.port;
     // Four TCP connections that never send a request occupy the four handshake slots.
     let mut held = vec![];
@@ -188,7 +188,7 @@ fn h7_duplicate_or_non_utf8_origin_and_duplicate_host_are_rejected() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn h7_the_same_three_over_a_real_socket_are_403() {
-    let rig = start(Some(KAT_TOKEN)).await;
+    let rig = start(Some(&kat_token())).await;
     let p = rig.port;
     let dup_origin = upgrade_bytes(p, &[b"Origin: https://evil.com\r\n"], true, true);
     assert_eq!(raw_request(p, &dup_origin).await.0, 403, "duplicate Origin");

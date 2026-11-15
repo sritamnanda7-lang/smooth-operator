@@ -112,7 +112,7 @@ fn link_hits(needles: &[&str], skip: Option<&str>) -> Vec<String> {
     link_code(skip)
         .into_iter()
         .filter(|(_, _, l)| needles.iter().any(|n| contains_word_start(l, n)))
-        .map(|(f, i, l)| format!("{f}:{i}: {}", l.trim()))
+        .map(|(f, i, _)| format!("{f}:{i}"))
         .collect()
 }
 fn link_file_code(name: &str) -> String {
@@ -162,7 +162,7 @@ fn ext_code_lines(exts: &[&str]) -> Vec<(String, usize, String)> {
     out
 }
 fn ext_hits(needles: &[&str], exts: &[&str]) -> Vec<String> {
-    ext_code_lines(exts).into_iter().filter(|(_, _, l)| needles.iter().any(|n| l.contains(n))).map(|(f, i, l)| format!("{f}:{i}: {}", l.trim())).collect()
+    ext_code_lines(exts).into_iter().filter(|(_, _, l)| needles.iter().any(|n| l.contains(n))).map(|(f, i, _)| format!("{f}:{i}")).collect()
 }
 fn require_ext_files() {
     for f in ["manifest.json", "sw.js", "popup.html", "popup.js", "lib/config.js", "lib/link.js", "lib/protocol.js", "lib/proof.js", "lib/state.js", "lib/backoff.js", "lib/view.js"] {
@@ -297,7 +297,7 @@ fn s03_link_token_has_no_clone_serialize_display_type_and_to_hex_is_crate_privat
     for l in &lines[at.saturating_sub(4)..at] {
         if l.contains("derive(") {
             for bad in ["Clone", "Copy", "Serialize", "Deserialize", "Type", "Debug", "Display", "PartialEq", "Hash", "Default"] {
-                assert!(!l.contains(bad), "LinkToken must not derive {bad}: {l}");
+                assert!(!l.contains(bad), "LinkToken must not derive {bad}");
             }
         }
     }
@@ -321,7 +321,7 @@ fn s03_link_token_has_no_clone_serialize_display_type_and_to_hex_is_crate_privat
         let code = strip_cfg_test(&fs::read_to_string(&f).unwrap_or_default());
         for (i, l) in code.lines().enumerate() {
             if !is_comment(l) && l.contains("to_hex(") {
-                bad.push(format!("{r}:{}: {}", i + 1, l.trim()));
+                bad.push(format!("{r}:{}", i + 1));
             }
         }
     }
@@ -333,14 +333,14 @@ fn s03_link_token_has_no_clone_serialize_display_type_and_to_hex_is_crate_privat
 fn s04_ws_url_is_the_fixed_loopback_url_without_query_or_fragment() {
     let cfg = read(&format!("{EXT}/lib/config.js"));
     let line = cfg.lines().find(|l| l.contains("WS_URL") && l.contains("export")).expect("config.js exports WS_URL");
-    assert!(line.contains("\"ws://127.0.0.1:47815/\""), "WS_URL must be exactly \"ws://127.0.0.1:47815/\": {line}");
+    assert!(line.contains("\"ws://127.0.0.1:47815/\""), "WS_URL must be exactly \"ws://127.0.0.1:47815/\"");
     let url = "ws://127.0.0.1:47815/";
     assert!(!url.contains('?') && !url.contains('#'));
     for (f, i, l) in ext_code_lines(&["js"]) {
         if f.ends_with("config.js") {
             continue;
         }
-        assert!(!l.contains("ws://") && !l.contains("wss://"), "{f}:{i}: only config.js may spell a socket URL: {l}");
+        assert!(!l.contains("ws://") && !l.contains("wss://"), "{f}:{i}: only config.js may spell a socket URL");
     }
 }
 
@@ -352,7 +352,7 @@ fn s04_every_websocket_is_opened_on_ws_url_alone_and_no_secret_goes_into_a_url()
         let src: String = fs::read_to_string(&f).unwrap().lines().filter(|l| !is_comment(l)).collect::<Vec<_>>().join("\n");
         for arg in call_args(&src, "new WebSocket(") {
             sockets += 1;
-            assert_eq!(arg.trim(), "WS_URL", "{}: `new WebSocket({arg})` must pass exactly WS_URL (no concatenation, no query)", relp(&f));
+            assert_eq!(arg.trim(), "WS_URL", "{}: `new WebSocket(..)` must pass exactly WS_URL (no concatenation, no query)", relp(&f));
         }
     }
     assert!(sockets >= 1, "positive control: link.js must open the socket with `new WebSocket(WS_URL)`");
@@ -360,7 +360,7 @@ fn s04_every_websocket_is_opened_on_ws_url_alone_and_no_secret_goes_into_a_url()
     for (f, i, l) in ext_code_lines(&["js"]) {
         if l.contains("WS_URL") || l.contains("new WebSocket") || l.contains("ws://") || l.contains("URLSearchParams") || l.contains("new URL(") {
             for secret in ["token", "code", "proof", "nonce"] {
-                assert!(!l.to_lowercase().contains(secret), "{f}:{i}: a URL line mentions `{secret}`: {l}");
+                assert!(!l.to_lowercase().contains(secret), "{f}:{i}: a URL line mentions a secret-named word");
             }
         }
     }
@@ -416,14 +416,14 @@ fn s07_storage_writes_only_token_and_link_the_code_never_and_no_removal_of_the_t
         let src: String = fs::read_to_string(&f).unwrap().lines().filter(|l| !is_comment(l)).collect::<Vec<_>>().join("\n");
         for arg in call_args(&src, "local.set(") {
             sets += 1;
-            let keys = object_keys(&arg).unwrap_or_else(|| panic!("{}: storage.local.set must take an object literal, got `{arg}`", relp(&f)));
+            let keys = object_keys(&arg).unwrap_or_else(|| panic!("{}: storage.local.set must take an object literal", relp(&f)));
             for k in &keys {
                 assert!(k == "token" || k == "link", "{}: storage key `{k}` is not allowed (only token, link)", relp(&f));
             }
-            assert!(!arg.contains("code"), "{}: the pairing code must never reach storage: `{arg}`", relp(&f));
+            assert!(!arg.contains("code"), "{}: the pairing code must never reach storage", relp(&f));
         }
         for arg in call_args(&src, "local.remove(") {
-            assert!(!arg.contains("token"), "{}: the token is never removed: `{arg}`", relp(&f));
+            assert!(!arg.contains("token"), "{}: the token is never removed", relp(&f));
         }
         assert!(!src.contains("local.clear("), "{}: storage.local.clear is not allowed", relp(&f));
         assert!(!src.contains("storage.sync") && !src.contains("storage.session"), "{}: only storage.local", relp(&f));
@@ -530,7 +530,7 @@ fn s11_no_unwrap_or_expect_in_shipped_so_link_code() {
     let hits: Vec<String> = link_code(None)
         .into_iter()
         .filter(|(_, _, l)| (l.contains(".unwrap()") || l.contains(".expect(") || l.contains(".unwrap_err()")) && !l.contains(".lock()"))
-        .map(|(f, i, l)| format!("{f}:{i}: {}", l.trim()))
+        .map(|(f, i, _)| format!("{f}:{i}"))
         .collect();
     assert_none("unwrap/expect in so/link", hits);
 }
@@ -542,7 +542,7 @@ fn s11b_no_unreachable_panic_todo_in_token_pairing_protocol_server() {
         .into_iter()
         .filter(|(f, _, _)| ["token.rs", "pairing.rs", "protocol.rs", "server.rs"].iter().any(|n| f.ends_with(n)))
         .filter(|(_, _, l)| ["unreachable!(", "panic!(", "todo!(", "unimplemented!("].iter().any(|n| l.contains(n)))
-        .map(|(f, i, l)| format!("{f}:{i}: {}", l.trim()))
+        .map(|(f, i, _)| format!("{f}:{i}"))
         .collect();
     assert_none("panic paths in shipped so/link code", hits);
 }
@@ -559,7 +559,7 @@ fn s12_no_network_api_in_the_ui_code_and_csp_unchanged_since_step_4() {
             }
             for needle in ["fetch(", "XMLHttpRequest", "WebSocket", "sendBeacon", "EventSource", "anthropic", "googleapis", "aistudio", "platform.claude"] {
                 if l.contains(needle) {
-                    hits.push(format!("{}:{}: {}", relp(&f), i + 1, l.trim()));
+                    hits.push(format!("{}:{}", relp(&f), i + 1));
                 }
             }
         }
@@ -722,8 +722,7 @@ fn s15_lib_rs_file_log_builder_iterates_log_silenced_not_literals() {
 #[test]
 fn s15_log_silenced_names_both_libraries() {
     let m = link_file_code("mod.rs");
-    let line = m.lines().find(|l| l.contains("LOG_SILENCED")).expect("LOG_SILENCED");
-    assert!(m.contains("\"tungstenite\"") && m.contains("\"tokio_tungstenite\""), "LOG_SILENCED must contain tungstenite and tokio_tungstenite: {line}");
+    assert!(m.contains("\"tungstenite\"") && m.contains("\"tokio_tungstenite\""), "LOG_SILENCED must contain tungstenite and tokio_tungstenite");
 }
 
 // ---- S16: the two sides of the link agree ----

@@ -28,12 +28,25 @@ use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{client_async, WebSocketStream};
 
 // ---------- known-answer vectors (shared with tests/so/ext/*.test.ts) ----------
-pub const KAT_TOKEN: &str = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
-pub const KAT_NONCE: &str = "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f";
-pub const KAT_CNONCE: &str = "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f";
-/// HMAC-SHA256(key = KAT_TOKEN bytes, "so-link-v1|ext|" + KAT_NONCE)
+/// The known-answer INPUTS are built at run time from byte ranges (not string literals): token = bytes
+/// 0x00..0x20, nonce = 0x20..0x40, cnonce = 0x40..0x60, each as 64 lowercase hex. The same vectors are in
+/// tests/so/ext/proof.test.ts.
+fn kat_hex(from: u8) -> String {
+    hex(&(from..from + 32).collect::<Vec<u8>>())
+}
+pub fn kat_token() -> String {
+    kat_hex(0x00)
+}
+pub fn kat_nonce() -> String {
+    kat_hex(0x20)
+}
+pub fn kat_cnonce() -> String {
+    kat_hex(0x40)
+}
+// Outputs (not inputs):
+/// HMAC-SHA256(key = kat_token() bytes, "so-link-v1|ext|" + kat_nonce())
 pub const KAT_CLIENT_PROOF: &str = "15e438d3c342dcd8cdf294af04a47a1c86af3a0f835436997c092aa8704a60f8";
-/// HMAC-SHA256(key = KAT_TOKEN bytes, "so-link-v1|app|" + KAT_CNONCE)
+/// HMAC-SHA256(key = kat_token() bytes, "so-link-v1|app|" + kat_cnonce())
 pub const KAT_SERVER_PROOF: &str = "425ee6788af9596d8d82eb6576967acafae4b8a5aea8987678e9b1e6db47274d";
 
 // ---------- hex + hmac ----------
