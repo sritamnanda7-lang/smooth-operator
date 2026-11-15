@@ -7,6 +7,7 @@ pub mod brain;
 pub mod commands;
 pub mod fncheck;
 pub mod hotkey;
+pub mod link;
 pub mod panel;
 pub mod rules;
 pub mod settings;
@@ -23,6 +24,7 @@ use tauri::AppHandle;
 pub fn setup(app: &AppHandle) {
     panel::create(app);
     stt::setup(app);
+    link::setup(app);
     let hotkey = settings::load_hotkey(app, Platform::current());
     let report = fncheck::check(&*fncheck::system_env(), hotkey);
     if report.has_problem() {

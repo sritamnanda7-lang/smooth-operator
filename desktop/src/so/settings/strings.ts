@@ -61,4 +61,16 @@ export const STRINGS: Record<string, string> = {
     "Free tier: Google may use your requests to improve its products, and human reviewers may read your input and output. Use it for development only; never say personal information.",
   aiTipGeminiSpend:
     "Spend caps in AI Studio are experimental and only for paid projects.",
+  linkGroup: "Chrome extension",
+  linkConnected: "Chrome extension: connected",
+  linkNotPaired: "Chrome extension: not paired",
+  linkNotFound:
+    "Chrome extension: not found (open Chrome; check the extension is on)",
+  linkPortBusy: "Port 47815 is used by another app",
+  linkKeychain: "Can't read the extension token from Keychain",
+  linkPair: "Pair",
+  linkCancel: "Cancel",
+  linkPairHelp:
+    "Type this code in the Smooth Operator extension popup. Expires in",
+  linkPairFailed: "Couldn't start pairing",
 };

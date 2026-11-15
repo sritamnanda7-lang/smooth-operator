@@ -406,7 +406,13 @@ fn s09_six_allow_permissions_in_default_json_and_nothing_else_added() {
         assert!(n.contains(w), "default.json must grant {w}");
     }
     let added: Vec<&String> = n.iter().filter(|x| !t.contains(x)).collect();
-    assert_eq!(added.len(), 6, "exactly the six brain permissions are added, got {added:?}");
+    // Step 5 legitimately adds exactly three link permissions on top of the six brain ones (nothing else).
+    let link: Vec<String> = ["so_link_status", "so_link_start_pairing", "so_link_cancel_pairing"].iter().map(|c| format!("allow-{}", c.replace('_', "-"))).collect();
+    for l in &link {
+        assert!(n.contains(l), "default.json must grant {l}");
+    }
+    assert_eq!(added.len(), 9, "exactly the six brain and three link permissions are added, got {added:?}");
+    assert!(added.iter().all(|x| want.contains(x) || link.contains(x)), "an unexpected permission was added: {added:?}");
     assert!(t.iter().all(|x| n.contains(x)), "no permission was removed");
     for bad in ["opener", "shell", "http:", "fs:", "dialog", "core:default"] {
         // only the ADDED ones: the old `allow-set-clamshell-microphone` contains "shell"
@@ -588,13 +594,16 @@ fn d6_step_3_and_earlier_test_files_are_unchanged_since_the_step_3_tag() {
 }
 
 #[test]
-fn d6_the_only_edit_to_settings_ui_test_is_the_one_allow_list_line() {
+fn d6_the_only_edit_to_settings_ui_test_is_the_allow_list_lines_of_steps_4_and_5() {
     require_tag();
-    let o = git_top(&["diff", "--numstat", BASE_TAG, "--", "tests/so/settings-ui.test.ts"]);
+    let o = git_top(&["diff", "-U0", BASE_TAG, "--", "tests/so/settings-ui.test.ts"]);
     let out = String::from_utf8_lossy(&o.stdout).to_string();
-    let mut it = out.split_whitespace();
-    let (add, del) = (it.next().unwrap_or("0"), it.next().unwrap_or("0"));
-    assert_eq!((add, del), ("1", "0"), "settings-ui.test.ts may only gain the BrainSection allow-list line: {out}");
+    let added: Vec<&str> = out.lines().filter(|l| l.starts_with('+') && !l.starts_with("+++")).collect();
+    let removed: Vec<&str> = out.lines().filter(|l| l.starts_with('-') && !l.starts_with("---")).collect();
+    assert!(removed.is_empty(), "settings-ui.test.ts must not lose lines: {removed:?}");
+    assert_eq!(added.len(), 2, "settings-ui.test.ts may only gain the BrainSection and LinkSection allow-list lines: {added:?}");
+    assert!(added[0].contains("\"BrainSection\","), "first added line: {}", added[0]);
+    assert!(added[1].contains("\"LinkSection\","), "second added line: {}", added[1]);
 }
 
 #[test]

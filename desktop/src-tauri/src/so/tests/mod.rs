@@ -32,3 +32,12 @@ mod brain_release_tests;
 mod brain_fake_tests;
 #[cfg(target_os = "macos")]
 mod brain_keychain_real;
+mod link_support;
+mod link_pairing_tests;
+mod link_token_tests;
+mod link_protocol_tests;
+mod link_handshake_tests;
+mod link_session_tests;
+mod link_ipc_tests;
+#[cfg(target_os = "macos")]
+mod link_keychain_real;

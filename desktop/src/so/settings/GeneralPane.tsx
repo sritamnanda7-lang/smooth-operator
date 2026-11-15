@@ -8,6 +8,7 @@ import { ModelSettingsCard } from "@/components/settings/general/ModelSettingsCa
 import { BrainSection } from "./BrainSection";
 import { FnCheckNotice } from "./FnCheckNotice";
 import { HotkeySetting } from "./HotkeySetting";
+import { LinkSection } from "./LinkSection";
 import { STRINGS } from "./strings";
 
 export const GeneralPane: React.FC = () => (
@@ -18,6 +19,7 @@ export const GeneralPane: React.FC = () => (
     </SettingsGroup>
     <ModelSettingsCard />
     <BrainSection />
+    <LinkSection />
     <SettingsGroup title={STRINGS.microphoneGroup}>
       <MicrophoneSelector descriptionMode="tooltip" grouped={true} />
     </SettingsGroup>

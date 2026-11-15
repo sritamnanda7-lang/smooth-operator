@@ -866,6 +866,26 @@ async soBrainOpenConsole(provider: ProviderId, page: ConsolePage) : Promise<Resu
     if(e instanceof Error) throw e;
     else return { status: "error", error: e  as any };
 }
+},
+/**
+ * Runs the possibly blocking Keychain read inside `spawn_blocking`.
+ */
+async soLinkStatus() : Promise<LinkStatus> {
+    return await TAURI_INVOKE("so_link_status");
+},
+/**
+ * Errors are fixed texts: "Too many wrong codes. Try again in N s." or `PORT_BUSY_TEXT`.
+ */
+async soLinkStartPairing() : Promise<Result<PairingView, string>> {
+    try {
+    return { status: "ok", data: await TAURI_INVOKE("so_link_start_pairing") };
+} catch (e) {
+    if(e instanceof Error) throw e;
+    else return { status: "error", error: e  as any };
+}
+},
+async soLinkCancelPairing() : Promise<null> {
+    return await TAURI_INVOKE("so_link_cancel_pairing");
 }
 }
 
@@ -1080,6 +1100,8 @@ export type LanguageStatus =
  * Auto can't work here; `language` is used instead.
  */
 { kind: "auto_unavailable"; language: string; reason: AutoUnavailableReason }
+export type LinkState = "Connected" | "NotPaired" | "NotFound" | "PortBusy" | "KeychainError"
+export type LinkStatus = { state: LinkState; pairing_secs_left: number | null; locked_secs: number | null }
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error"
 export type ModelInfo = { id: string; name: string; description: string; filename: string; source: ModelSource; size_mb: number; is_downloaded: boolean; is_downloading: boolean; partial_size: number; accuracy_score: number; speed_score: number; supports_translation: boolean; is_recommended: boolean; supported_languages: string[]; supports_language_selection: boolean; is_custom: boolean; supports_streaming: boolean; supports_language_detection: boolean }
 export type ModelLoadStatus = { is_loaded: boolean; current_model: string | null }
@@ -1149,6 +1171,10 @@ export type OverlayPosition = "top" | "bottom"
  * streaming mode (that is driven purely by model capability).
  */
 export type OverlayStyle = "none" | "minimal" | "live"
+/**
+ * Returned by `start` only. The code is never logged or sent anywhere but the Settings page.
+ */
+export type PairingView = { code: string; secs_left: number }
 export type PasteMethod = "ctrl_v" | "direct" | "none" | "shift_insert" | "ctrl_shift_v"
 export type PermissionAccess = "allowed" | "denied" | "unknown"
 /**

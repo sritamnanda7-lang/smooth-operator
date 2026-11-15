@@ -111,6 +111,12 @@ fn build_console_filter() -> env_filter::Filter {
         }
     }
 
+    // After the RUST_LOG parse, so a plain `RUST_LOG=tungstenite=trace` cannot switch these back on. A more
+    // specific directive (`tungstenite::protocol=trace`) still can, for the console only; the file log is unaffected (step 5).
+    for target in so::link::LOG_SILENCED {
+        builder.filter_module(target, log::LevelFilter::Off);
+    }
+
     builder.build()
 }
 
@@ -537,6 +543,9 @@ pub fn run(cli_args: CliArgs) {
             so::brain::commands::so_brain_remove_key,
             so::brain::commands::so_brain_check_key,
             so::brain::commands::so_brain_open_console,
+            so::link::commands::so_link_status,
+            so::link::commands::so_link_start_pairing,
+            so::link::commands::so_link_cancel_pairing,
         ])
         .events(collect_events![
             managers::transcription::StreamTextEvent,
@@ -554,16 +563,22 @@ pub fn run(cli_args: CliArgs) {
 
     let invoke_handler = specta_builder.invoke_handler();
 
+    // Step 5: these libraries log whole messages at Trace; never let them reach any target.
+    let mut log_builder = LogBuilder::new()
+        .level(log::LevelFilter::Trace) // Set to most verbose level globally
+        // Key path: never above Info, even with --debug / Trace, so no
+        // key event detail can reach a log (our shortcut code and the crate).
+        .level_for("handy_keys", log::LevelFilter::Info)
+        .level_for("handy_app_lib::shortcut", log::LevelFilter::Info);
+    for target in so::link::LOG_SILENCED {
+        log_builder = log_builder.level_for(*target, log::LevelFilter::Off);
+    }
+
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default()
         .device_event_filter(tauri::DeviceEventFilter::Always)
         .plugin(
-            LogBuilder::new()
-                .level(log::LevelFilter::Trace) // Set to most verbose level globally
-                // Key path: never above Info, even with --debug / Trace, so no
-                // key event detail can reach a log (our shortcut code and the crate).
-                .level_for("handy_keys", log::LevelFilter::Info)
-                .level_for("handy_app_lib::shortcut", log::LevelFilter::Info)
+            log_builder
                 .max_file_size(500_000)
                 .rotation_strategy(RotationStrategy::KeepOne)
                 .clear_targets()
