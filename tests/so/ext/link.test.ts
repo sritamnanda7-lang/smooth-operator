@@ -143,9 +143,10 @@ describe("E5 pairing, then the normal auth path", () => {
     s.serverClose();
     await settle();
     const n = s.sent.length;
+    expect(stateOf(r), "right after the close (before the 1 s quick retry fires)").toBe(S.APP_NOT_FOUND);
     await r.timers.advance(60_000);
-    expect(s.sent.length, "no ping after the socket closed").toBe(n);
-    expect(stateOf(r)).toBe(S.APP_NOT_FOUND);
+    expect(s.sent.length, "no ping on the closed socket").toBe(n);
+    expect(s.sentOf("ping").length).toBe(0);
   });
 
   it("a pair answer of wrong_code / locked / expired / not_pairing ends in the matching state and keeps the pairing socket closed", async () => {
