@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
-// Quick retries 1 s, 2 s, 4 s, then null (wait for the alarm). Stub until the tests exist.
-export function delayFor(_attempt) {
-  throw new Error("not implemented");
+// Quick retries after the app is gone: 1 s, 2 s, 4 s, then null (only the 30 s alarm brings it back).
+const DELAYS = [1000, 2000, 4000];
+
+/** @param {number} attempt 0 for the first retry */
+export function delayFor(attempt) {
+  return DELAYS[attempt] ?? null;
 }

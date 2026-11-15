@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: FSL-1.1-MIT -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Smooth Operator</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <p id="status"></p>
+    <div id="pair-row" hidden>
+      <input id="digits" type="text" inputmode="numeric" maxlength="6" autocomplete="off" spellcheck="false" aria-label="6-digit code" />
+      <button id="pair" type="button">Pair</button>
+    </div>
+    <button id="retry" type="button" hidden>Retry</button>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
