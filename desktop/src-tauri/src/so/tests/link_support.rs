@@ -409,3 +409,53 @@ pub fn leaked(records: &[String], secrets: &[String]) -> Vec<String> {
     let forms = sentinel_forms(secrets);
     records.iter().filter(|r| forms.iter().any(|f| r.contains(f.as_str()))).cloned().collect()
 }
+
+// ---------- raw frames and raw requests (step 5 review follow-up) ----------
+/// One client-to-server frame: FIN set, masked (all-zero mask key, so the payload is sent as is). Payload <= 125 bytes.
+pub fn masked_frame(opcode: u8, payload: &[u8]) -> Vec<u8> {
+    assert!(payload.len() <= 125);
+    let mut f = vec![0x80 | opcode, 0x80 | payload.len() as u8, 0, 0, 0, 0];
+    f.extend_from_slice(payload);
+    f
+}
+/// Sends `request` bytes as they are and returns the HTTP status and the socket.
+pub async fn raw_request(port: u16, request: &[u8]) -> (u16, TcpStream) {
+    let mut tcp = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    tcp.write_all(request).await.unwrap();
+    let mut buf = vec![0u8; 2048];
+    let n = tokio::time::timeout(LONG, tcp.read(&mut buf)).await.expect("no HTTP answer").unwrap();
+    let head = String::from_utf8_lossy(&buf[..n]).to_string();
+    let code = head.split_whitespace().nth(1).and_then(|c| c.parse().ok()).unwrap_or_else(|| panic!("no HTTP status line in {head:?}"));
+    (code, tcp)
+}
+/// A valid upgrade request with extra raw header lines (each already ending in \r\n) inserted.
+pub fn upgrade_bytes(port: u16, extra_headers: &[&[u8]], with_host: bool, with_origin: bool) -> Vec<u8> {
+    let mut r = b"GET / HTTP/1.1\r\n".to_vec();
+    if with_host {
+        r.extend_from_slice(format!("Host: 127.0.0.1:{port}\r\n").as_bytes());
+    }
+    r.extend_from_slice(b"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\n");
+    if with_origin {
+        r.extend_from_slice(format!("Origin: {ALLOWED_ORIGIN}\r\n").as_bytes());
+    }
+    for h in extra_headers {
+        r.extend_from_slice(h);
+    }
+    r.extend_from_slice(b"\r\n");
+    r
+}
+/// Reads until the peer closes (or 4 s) and returns the code of the first Close frame (0x88) found.
+pub async fn raw_close_code(tcp: &mut TcpStream) -> Option<u16> {
+    let mut all = vec![];
+    let _ = tokio::time::timeout(LONG, async {
+        let mut b = [0u8; 512];
+        loop {
+            match tcp.read(&mut b).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => all.extend_from_slice(&b[..n]),
+            }
+        }
+    })
+    .await;
+    all.windows(4).find(|w| w[0] == 0x88 && w[1] >= 2).map(|w| u16::from_be_bytes([w[2], w[3]]))
+}

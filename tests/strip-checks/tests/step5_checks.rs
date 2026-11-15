@@ -535,6 +535,18 @@ fn s11_no_unwrap_or_expect_in_shipped_so_link_code() {
     assert_none("unwrap/expect in so/link", hits);
 }
 
+// ---- S11b: no panic paths in the finished link files (commands.rs and mod.rs still hold stubs until increment 4) ----
+#[test]
+fn s11b_no_unreachable_panic_todo_in_token_pairing_protocol_server() {
+    let hits: Vec<String> = link_code(None)
+        .into_iter()
+        .filter(|(f, _, _)| ["token.rs", "pairing.rs", "protocol.rs", "server.rs"].iter().any(|n| f.ends_with(n)))
+        .filter(|(_, _, l)| ["unreachable!(", "panic!(", "todo!(", "unimplemented!("].iter().any(|n| l.contains(n)))
+        .map(|(f, i, l)| format!("{f}:{i}: {}", l.trim()))
+        .collect();
+    assert_none("panic paths in shipped so/link code", hits);
+}
+
 // ---- S12: the UI still has no network API; CSP unchanged ----
 #[test]
 fn s12_no_network_api_in_the_ui_code_and_csp_unchanged_since_step_4() {
@@ -698,11 +710,13 @@ fn s15_lib_rs_applies_the_filter_in_the_console_builder() {
 }
 
 #[test]
-fn s15_lib_rs_applies_the_filter_in_the_file_log_builder() {
+fn s15_lib_rs_file_log_builder_iterates_log_silenced_not_literals() {
     let src = lib_rs();
     let at = src.find("LogBuilder::new()").expect("the tauri-plugin-log builder");
     let end = src[at..].find(".max_file_size").map_or(src.len(), |e| at + e);
-    assert!(silenced_in(&src[at..end]), "the file/console LogBuilder must turn tungstenite and tokio_tungstenite Off (level_for, before .max_file_size)");
+    let sec = &src[at..end];
+    assert!(sec.contains("LOG_SILENCED") && sec.contains("LevelFilter::Off"), "the file LogBuilder must turn the libraries Off by iterating so::link::LOG_SILENCED (one list, no literals)");
+    assert!(!sec.contains("\"tungstenite\"") && !sec.contains("\"tokio_tungstenite\""), "no literal library names in the file LogBuilder: iterate LOG_SILENCED");
 }
 
 #[test]

@@ -160,3 +160,44 @@ async fn h6_a_fifth_concurrent_unfinished_handshake_is_dropped() {
     }
     let _ws = expect_next_101(p).await;
 }
+
+// ---------- duplicate and non-UTF-8 headers (review nit 8) ----------
+fn req_multi(hosts: &[&[u8]], origins: &[&[u8]]) -> Request {
+    let mut b = http::Request::builder().method("GET").uri("/");
+    for h in hosts {
+        b = b.header("Host", http::HeaderValue::from_bytes(h).unwrap());
+    }
+    for o in origins {
+        b = b.header("Origin", http::HeaderValue::from_bytes(o).unwrap());
+    }
+    b.body(()).unwrap()
+}
+
+#[test]
+fn h7_duplicate_or_non_utf8_origin_and_duplicate_host_are_rejected() {
+    let host = good_host();
+    let good_o = ALLOWED_ORIGIN.as_bytes();
+    let ck = |r: Request| check_handshake(&r, &LINK, PORT);
+    assert_eq!(ck(req_multi(&[host.as_bytes()], &[good_o, b"https://evil.com"])), Err(HandshakeReject::Origin), "good Origin first, evil second");
+    assert_eq!(ck(req_multi(&[host.as_bytes()], &[b"https://evil.com", good_o])), Err(HandshakeReject::Origin), "evil first, good second");
+    assert_eq!(ck(req_multi(&[host.as_bytes()], &[b"chrome-extension://\xff\xfe"])), Err(HandshakeReject::Origin), "non-UTF-8 Origin");
+    assert_eq!(ck(req_multi(&[host.as_bytes(), b"evil.com:47815"], &[good_o])), Err(HandshakeReject::Host), "good Host first, evil second");
+    assert_eq!(ck(req_multi(&[b"evil.com:47815", host.as_bytes()], &[good_o])), Err(HandshakeReject::Host), "evil Host first, good second");
+    assert_eq!(ck(req_multi(&[host.as_bytes()], &[good_o])), Ok(()), "positive control");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn h7_the_same_three_over_a_real_socket_are_403() {
+    let rig = start(Some(KAT_TOKEN)).await;
+    let p = rig.port;
+    let dup_origin = upgrade_bytes(p, &[b"Origin: https://evil.com\r\n"], true, true);
+    assert_eq!(raw_request(p, &dup_origin).await.0, 403, "duplicate Origin");
+    let bad_bytes = upgrade_bytes(p, &[b"Origin: \xff\xfe\r\n"], true, false);
+    assert_eq!(raw_request(p, &bad_bytes).await.0, 403, "non-UTF-8 Origin");
+    let dup_host = upgrade_bytes(p, &[b"Host: evil.com:47815\r\n"], true, true);
+    assert_eq!(raw_request(p, &dup_host).await.0, 403, "duplicate Host");
+    // Positive control: the same helper with one Host and one Origin is a real upgrade.
+    let good = upgrade_bytes(p, &[], true, true);
+    let code = raw_request(p, &good).await.0;
+    assert_eq!(code, 101, "positive control");
+}

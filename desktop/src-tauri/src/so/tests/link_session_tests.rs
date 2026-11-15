@@ -10,6 +10,7 @@ use crate::so::link::commands::LinkState;
 use crate::so::link::pairing::PairError;
 use crate::so::link::server::Link;
 use crate::so::link::{LOG_SILENCED, PORT_BUSY_TEXT};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const TOK: &str = "abababababababababababababababababababababababababababababababab";
@@ -408,6 +409,129 @@ async fn w17_a_blocked_keychain_read_never_piles_up_a_second_auth_is_rejected_at
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
     assert!(rig.store.gets() >= 2);
+}
+
+// ---------- SF1: a peer that floods and never reads cannot hold the slot ----------
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn sf1_a_peer_that_floods_pings_and_never_reads_does_not_hold_the_pending_slot() {
+    use tokio::io::AsyncWriteExt;
+    let rig = start(Some(TOK)).await; // auth deadline 500 ms
+    let host = format!("127.0.0.1:{}", rig.port);
+    let (code, mut tcp) = raw_upgrade(rig.port, "/", Some(&host), Some(crate::so::link::ALLOWED_ORIGIN)).await;
+    assert_eq!(code, 101);
+    // ~3 MB of masked Ping frames, never reading the pongs. The writer runs on its own task: it may block.
+    let flood = tokio::spawn(async move {
+        // 125-byte payloads: every ping is answered by a 127-byte pong, so ~3 MB in = ~3 MB of pongs the peer never reads.
+        let frame = masked_frame(0x9, &[0x41; 125]);
+        let chunk: Vec<u8> = frame.iter().copied().cycle().take(frame.len() * 100).collect();
+        for _ in 0..250 {
+            if tokio::time::timeout(Duration::from_secs(3), tcp.write_all(&chunk)).await.is_err() {
+                break;
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await; // keep the socket open, still not reading
+        drop(tcp);
+    });
+    tokio::time::sleep(Duration::from_millis(500 + 1500)).await; // auth_timeout + 1.5 s
+    let (code, _ws) = dial_status(rig.port).await;
+    assert_eq!(code, 101, "the pending slot must be free 1.5 s after the auth deadline, even though the peer never reads");
+    flood.abort();
+}
+
+// ---------- SF2: status() never piles up blocking Keychain reads ----------
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn sf2_two_status_calls_with_a_blocked_store_start_one_read_and_the_second_says_keychain_error() {
+    let rig = start(Some(TOK)).await;
+    struct Release(Arc<TestStore>);
+    impl Drop for Release {
+        fn drop(&mut self) {
+            self.0.release(); // a failed assertion must not leave the blocking thread stuck
+        }
+    }
+    rig.store.block_gets();
+    let _release = Release(rig.store.clone());
+    let l = rig.link.clone();
+    let first = tokio::task::spawn_blocking(move || l.status());
+    let start = Instant::now();
+    while rig.store.gets() < 1 {
+        assert!(start.elapsed() < Duration::from_secs(2), "the first status() never reached the store");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let t = Instant::now();
+    let second = tokio::time::timeout(Duration::from_millis(500), status(&rig.link)).await.unwrap_or_else(|_| panic!("the second status() waited for the blocked read instead of answering KeychainError"));
+    assert_eq!(second.state, LinkState::KeychainError, "a read is already running: answer KeychainError without reading");
+    assert!(t.elapsed() < Duration::from_millis(300), "must not wait for the blocked read: {:?}", t.elapsed());
+    assert_eq!(rig.store.gets(), 1, "only one blocking read exists");
+    rig.store.release();
+    let _ = first.await.unwrap();
+}
+
+// ---------- nit 8 over the wire: empty code ----------
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn nit8_an_empty_pair_code_is_a_wrong_try() {
+    let rig = start(None).await;
+    let _view = rig.link.start_pairing().ok().unwrap_or_else(|| panic!("start"));
+    let (mut ws, m) = pair_with(rig.port, "").await;
+    assert_eq!(m["state"], "wrong_code", "{m}");
+    assert_eq!(expect_close(&mut ws).await, 4401);
+}
+
+// ---------- nit 5: invalid UTF-8 in a text frame ----------
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn nit5_an_invalid_utf8_text_frame_closes_4400() {
+    use tokio::io::AsyncWriteExt;
+    let rig = start(Some(TOK)).await;
+    let host = format!("127.0.0.1:{}", rig.port);
+    let (code, mut tcp) = raw_upgrade(rig.port, "/", Some(&host), Some(crate::so::link::ALLOWED_ORIGIN)).await;
+    assert_eq!(code, 101);
+    tcp.write_all(&masked_frame(0x1, &[0xff, 0xfe, 0xfd])).await.unwrap();
+    assert_eq!(raw_close_code(&mut tcp).await, Some(4400));
+}
+
+// ---------- nit 2: metrics for a client that leaves and for a dropped 5th handshake ----------
+#[test]
+fn nit2_metrics_log_closed_25_dropped_handshake_4_and_bad_utf8_23() {
+    run_isolated(module_path!(), "nit2_inner");
+}
+#[test]
+#[ignore]
+fn nit2_inner() {
+    use tokio::io::AsyncWriteExt;
+    if !in_child() {
+        return;
+    }
+    install_capture();
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(3).enable_all().build().unwrap();
+    rt.block_on(async {
+        let recs = captured;
+        // outcome 25: an authenticated client disconnects
+        let rig = start(Some(TOK)).await;
+        let from = link_records(&captured()).len();
+        let ws = auth_ok(rig.port, TOK, &cnonce(1)).await;
+        drop(ws);
+        let r = wait_outcome(recs, from, 25);
+        assert_eq!(r.0, 25);
+        // outcome 23: invalid UTF-8 text frame
+        let host = format!("127.0.0.1:{}", rig.port);
+        let from = link_records(&captured()).len();
+        let (_, mut tcp) = raw_upgrade(rig.port, "/", Some(&host), Some(crate::so::link::ALLOWED_ORIGIN)).await;
+        tcp.write_all(&masked_frame(0x1, &[0xff, 0xfe])).await.unwrap();
+        let r = wait_outcome(recs, from, 23);
+        assert_eq!(r.1, 4400);
+        drop(tcp);
+        // outcome 4 code 0: the 5th concurrent unfinished handshake is dropped
+        let rig = start_with(test_cfg(3000, 5000), TestStore::new(Some(TOK))).await;
+        let mut held = vec![];
+        for _ in 0..4 {
+            held.push(tokio::net::TcpStream::connect(("127.0.0.1", rig.port)).await.unwrap());
+            tokio::time::sleep(Duration::from_millis(60)).await;
+        }
+        let from = link_records(&captured()).len();
+        let mut fifth = tokio::net::TcpStream::connect(("127.0.0.1", rig.port)).await.unwrap();
+        assert!(peer_closes_within(&mut fifth, Duration::from_millis(1200)).await);
+        let r = wait_outcome(recs, from, 4);
+        assert_eq!(r.1, 0, "a dropped handshake has no HTTP status: outcome 4 code 0");
+    });
 }
 
 // ---------- W14: log checks (child processes) ----------
