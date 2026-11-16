@@ -51,7 +51,7 @@ describe("E1 parseCmd accepts the three shapes", () => {
     expect(r.cmd.url).toBeUndefined();
   });
   it("cal_open: the url, with / raw or %2F in dates", () => {
-    for (const u of [cal(), cal().replace("/2026", "%2F2026")]) {
+    for (const u of [cal(), cal().replaceAll("/2026", "%2F2026")]) {
       const r = parseCmd(msg({ op: "cal_open", url: u }), NOW) as any;
       expect(r.ok, u).toBe(true);
       expect(r.cmd.url).toBe(u);
@@ -76,7 +76,7 @@ describe("N1 only canonical URLs (new URL(s).href === s)", () => {
   const dates1 = dates(NOW + DAY);
   const calBase = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Review&dates=${dates1}`;
   it("the app's own URL shapes still pass", () => {
-    for (const u of [YT, yt("Beyoncé — Halo"), yt("𝄞".repeat(5)), yt("a&b=c#d"), cal(), cal("He said \"hi\" \\ back"), cal("𝄞".repeat(100)), cal().replace("/2026", "%2F2026"), new URL(`https://www.youtube.com/results?${new URLSearchParams({ search_query: "Beyoncé — Halo ~!*" })}`).href]) {
+    for (const u of [YT, yt("Beyoncé — Halo"), yt("𝄞".repeat(5)), yt("a&b=c#d"), cal(), cal("He said \"hi\" \\ back"), cal("𝄞".repeat(100)), cal().replaceAll("/2026", "%2F2026"), new URL(`https://www.youtube.com/results?${new URLSearchParams({ search_query: "Beyoncé — Halo ~!*" })}`).href]) {
       expect(new URL(u).href, u).toBe(u);
       expect(new URL(u).hostname === "www.youtube.com" ? checkYtUrl(u) : checkCalUrl(u, NOW), u).toBe(true);
     }
@@ -99,12 +99,12 @@ describe("N1 only canonical URLs (new URL(s).href === s)", () => {
       bad(msg({ op: "yt_play", url: u }));
     }
     const cals = [
-      calBase.replace("&text=", "&%74ext="),
-      calBase.replace("Review", "Re view"),
-      calBase.replace("Review", "Re\tview"),
-      calBase.replace("https://calendar", "https://CALENDAR"),
-      calBase.replace(".com/", ".com:443/"),
-      calBase.replace("TEMPLATE", "TEM%50LATE"),
+      calBase.replaceAll("&text=", "&%74ext="),
+      calBase.replaceAll("Review", "Re view"),
+      calBase.replaceAll("Review", "Re\tview"),
+      calBase.replaceAll("https://calendar", "https://CALENDAR"),
+      calBase.replaceAll(".com/", ".com:443/"),
+      calBase.replaceAll("TEMPLATE", "TEM%50LATE"),
       " " + calBase,
     ];
     for (const u of cals) {
@@ -186,13 +186,13 @@ describe("E1 parseCmd rejects, and keeps a valid id", () => {
     const d = dates(NOW + DAY);
     const base = "https://calendar.google.com/calendar/render";
     const cases: [string, string][] = [
-      [cal().replace("https:", "http:"), "http"],
-      [cal().replace("calendar.google.com", "calendar.google.com.evil.com"), "suffix host"],
-      [cal().replace("https://", "https://a@"), "username"],
-      [cal().replace(".com/", ".com:8443/"), "port"],
+      [cal().replaceAll("https:", "http:"), "http"],
+      [cal().replaceAll("calendar.google.com", "calendar.google.com.evil.com"), "suffix host"],
+      [cal().replaceAll("https://", "https://a@"), "username"],
+      [cal().replaceAll(".com/", ".com:8443/"), "port"],
       [cal() + "#x", "hash"],
-      [cal().replace("/calendar/render", "/calendar/u/0/render"), "other path"],
-      [cal().replace("/calendar/render", "/calendar/r/eventedit"), "eventedit path"],
+      [cal().replaceAll("/calendar/render", "/calendar/u/0/render"), "other path"],
+      [cal().replaceAll("/calendar/render", "/calendar/r/eventedit"), "eventedit path"],
       [`${base}?text=Review&action=TEMPLATE&dates=${d}`, "keys out of order"],
       [`${base}?action=TEMPLATE&dates=${d}&text=Review`, "keys out of order 2"],
       [cal() + "&add=a@b.co", "add"],
@@ -209,7 +209,7 @@ describe("E1 parseCmd rejects, and keeps a valid id", () => {
       [cal(""), "empty text"],
       [`${base}?action=TEMPLATE&text=a%00b&dates=${d}`, "NUL in text"],
       [`${base}?action=TEMPLATE&text=a%0Ab&dates=${d}`, "newline in text"],
-      [cal("x", stamp(NOW + DAY).replace("Z", "") + "/" + stamp(NOW + DAY + 60 * MIN).replace("Z", "")), "dates without Z"],
+      [cal("x", stamp(NOW + DAY).replaceAll("Z", "") + "/" + stamp(NOW + DAY + 60 * MIN).replaceAll("Z", "")), "dates without Z"],
       [cal("x", `${stamp(NOW + DAY)}/${stamp(NOW + DAY)}`), "end == start"],
       [cal("x", `${stamp(NOW + DAY + 60 * MIN)}/${stamp(NOW + DAY)}`), "end before start"],
       [cal("x", dates(NOW + DAY, 481)), "481 minutes"],

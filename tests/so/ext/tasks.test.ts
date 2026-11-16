@@ -47,7 +47,7 @@ const apis = (r: ReturnType<typeof rig>) => r.sim.calls.map((c) => c.api);
 /** Hostnames named by a permissions.contains / tabs.query call (parsed, not substring-matched). */
 const hostsOf = (arg: unknown): string[] => {
   const a = arg as { origins?: string[]; url?: string };
-  return [...(a.origins ?? []), ...(a.url ? [a.url] : [])].map((p) => new URL(p.replace("*", "")).hostname);
+  return [...(a.origins ?? []), ...(a.url ? [a.url] : [])].map((p) => new URL(p.replace(/\*/g, "")).hostname);
 };
 const guarded = ["tabs.create", "tabs.update", "tabs.query", "tabs.get", "windows.update", "scripting.executeScript"];
 
