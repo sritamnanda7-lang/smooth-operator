@@ -259,6 +259,8 @@ export function makeTime() {
   const sleepers: { at: number; res: () => void }[] = [];
   return {
     now: () => t,
+    /** Sleepers still waiting (0 when the code under test left no timer behind). */
+    pending: () => sleepers.length,
     sleep: (ms: number) => new Promise<void>((res) => void sleepers.push({ at: t + ms, res })),
     async advance(ms: number) {
       const end = t + ms;
@@ -299,6 +301,7 @@ export function makeBrowser(time: Time, o: { granted?: boolean; tabs?: Tab[] } =
     getFails: false,
     nav: (url: string): Nav => ({ delay: 300, url }),
     script: {} as Record<string, (c: { tab: Tab; args: unknown[]; now: number }) => unknown>,
+    hangApis: new Set<string>(), // chrome APIs (e.g. "tabs.get") whose promise never settles
     hang: new Set<string>(), // injected function names whose executeScript never settles
     navDone: [] as { tabId: number; url: string | undefined; at: number }[],
     count: (api: string) => calls.filter((c) => c.api === api).length,
@@ -338,6 +341,7 @@ export function makeBrowser(time: Time, o: { granted?: boolean; tabs?: Tab[] } =
       },
       get: async (id: number) => {
         log("tabs.get", { id });
+        if (sim.hangApis.has("tabs.get")) return new Promise<never>(() => {});
         const tab = tabs.get(id);
         if (!tab || sim.getFails) throw new Error("No tab with id: " + id);
         return { ...tab };

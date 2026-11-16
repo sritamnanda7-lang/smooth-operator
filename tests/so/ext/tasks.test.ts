@@ -366,6 +366,38 @@ describe("E9 one job at a time, cancel", () => {
   });
 });
 
+describe("E9 JOB_MAX watchdog (75 s)", () => {
+  it("a browser call that never settles ends as timeout at about 75 s, leaves no timer, and the next command runs", async () => {
+    const r = rig();
+    r.sim.hangApis.add("tabs.get");
+    const a = r.start(docsCmd(1));
+    await r.time.advance(74_000);
+    expect(a.box.out, "not before the watchdog").toBeUndefined();
+    await r.time.advance(2000);
+    await a.p;
+    expect(a.box.out?.r).toBe("timeout");
+    expect(a.box.out!.ms).toBeGreaterThanOrEqual(74_000);
+    expect(a.box.out!.ms).toBeLessThanOrEqual(76_000);
+    expect(r.time.pending(), "no sleeper left scheduled after the job ended").toBe(0);
+    r.sim.hangApis.clear();
+    r.sim.nav = () => ({ delay: 100, url: DOCS_EDIT });
+    expect((await r.run(docsCmd(2))).r, "the next command runs (not busy)").toBe("editor_open");
+  });
+  it("a cancel before the watchdog stays cancelled", async () => {
+    const r = rig();
+    r.sim.hangApis.add("tabs.get");
+    const a = r.start(docsCmd(1));
+    await r.time.advance(10_000);
+    r.tasks.cancel(1);
+    await r.time.advance(500);
+    await a.p;
+    expect(a.box.out?.r).toBe("cancelled");
+    await r.time.advance(100_000);
+    expect(a.box.out?.r, "the watchdog must not overwrite it").toBe("cancelled");
+    expect(r.time.pending()).toBe(0);
+  });
+});
+
 describe("E3 (tasks side) every command awaits ready", () => {
   it("nothing touches tabs, scripting, windows or permissions before ready resolves", async () => {
     let release!: () => void;

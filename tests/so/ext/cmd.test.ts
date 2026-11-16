@@ -70,6 +70,57 @@ describe("E1 parseCmd accepts the three shapes", () => {
   });
 });
 
+describe("N1 only canonical URLs (new URL(s).href === s)", () => {
+  const dates1 = dates(NOW + DAY);
+  const calBase = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=Review&dates=${dates1}`;
+  it("the app's own URL shapes still pass", () => {
+    for (const u of [YT, yt("Beyoncé — Halo"), yt("𝄞".repeat(5)), yt("a&b=c#d"), cal(), cal("He said \"hi\" \\ back"), cal("𝄞".repeat(100)), cal().replace("/2026", "%2F2026"), new URL(`https://www.youtube.com/results?${new URLSearchParams({ search_query: "Beyoncé — Halo ~!*" })}`).href]) {
+      expect(new URL(u).href, u).toBe(u);
+      expect(u.startsWith("https://www.youtube.com") ? checkYtUrl(u) : checkCalUrl(u, NOW), u).toBe(true);
+    }
+  });
+  it("non-canonical spellings are rejected", () => {
+    const yts = [
+      "https://www.youtube.com/results?search_query=a b",
+      "https://www.youtube.com/results?search_query=a\tb",
+      "https://www.youtube.com/results?search_query=a\nb",
+      "https://www.youtube.com/results?search_query=a'b",
+      "https://WWW.YOUTUBE.COM/results?search_query=a",
+      "https://www.youtube.com:443/results?search_query=a",
+      "https://www.youtube.com/results?%73earch_query=a",
+      " https://www.youtube.com/results?search_query=a",
+      "https://www.youtube.com/results?search_query=a ",
+      "https://www.youtube.com/./results?search_query=a",
+    ];
+    for (const u of yts) {
+      expect(checkYtUrl(u), JSON.stringify(u)).toBe(false);
+      bad(msg({ op: "yt_play", url: u }));
+    }
+    const cals = [
+      calBase.replace("&text=", "&%74ext="),
+      calBase.replace("Review", "Re view"),
+      calBase.replace("Review", "Re\tview"),
+      calBase.replace("https://calendar", "https://CALENDAR"),
+      calBase.replace(".com/", ".com:443/"),
+      calBase.replace("TEMPLATE", "TEM%50LATE"),
+      " " + calBase,
+    ];
+    for (const u of cals) {
+      expect(checkCalUrl(u, NOW), JSON.stringify(u)).toBe(false);
+      bad(msg({ op: "cal_open", url: u }));
+    }
+  });
+});
+
+describe("N2 calendar event length", () => {
+  it("shorter than 5 minutes is rejected, 5 minutes is fine, a start up to 1 day in the past is still allowed", () => {
+    for (const m of [1, 4]) expect(checkCalUrl(cal("x", dates(NOW + DAY, m)), NOW), `${m} min`).toBe(false);
+    expect(checkCalUrl(cal("x", dates(NOW + DAY, 5)), NOW)).toBe(true);
+    expect(checkCalUrl(cal("x", dates(NOW - DAY + MIN, 5)), NOW)).toBe(true);
+    expect(checkCalUrl(cal("x", dates(NOW - DAY + MIN, 4)), NOW)).toBe(false);
+  });
+});
+
 describe("E1 parseCmd rejects, and keeps a valid id", () => {
   it("unknown op, extra key, wrong t or v, missing keys", () => {
     bad(msg({ op: "nope" }));
