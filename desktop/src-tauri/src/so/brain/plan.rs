@@ -281,7 +281,7 @@ fn opt_number(args: &Map<String, Value>, key: &str, lo: u64, hi: u64) -> Result<
     }
 }
 
-const WEEKDAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+pub(crate) const WEEKDAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 fn date_arg(s: &str) -> Result<String, Reject> {
     let lower = s.to_ascii_lowercase();
@@ -402,13 +402,19 @@ pub fn risk_of(a: &Action) -> Risk {
     match a {
         Action::DocsNew { .. } => Risk::Approve,
         Action::CalendarNewEvent { guests, .. } if !guests.is_empty() => Risk::Approve,
-        _ => Risk::Safe,
+        Action::OpenApp { .. }
+        | Action::SwitchApp { .. }
+        | Action::Media { .. }
+        | Action::OpenUrl { .. }
+        | Action::WebSearch { .. }
+        | Action::YoutubePlay { .. }
+        | Action::CalendarNewEvent { .. } => Risk::Safe,
     }
 }
 
 /// One thing the executor does for a step (step 6). A step is a list of these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // stub: remove when wired (step 6)
+#[allow(dead_code)] // remove when wired (step 6 inc 3)
 pub enum OpKind {
     AppOpen,
     AppSwitch,
@@ -422,16 +428,37 @@ pub enum OpKind {
     WebSearch,
 }
 
-/// The fixed op list per action (stub: step 6 increment 1).
-#[allow(dead_code)] // stub: remove when wired (step 6)
-pub fn ops_of(_a: &Action) -> &'static [OpKind] {
-    todo!("step 6 inc 1")
+/// The fixed op list per action.
+#[allow(dead_code)] // remove when wired (step 6 inc 3)
+pub fn ops_of(a: &Action) -> &'static [OpKind] {
+    use OpKind::*;
+    match a {
+        Action::OpenApp { .. } => &[AppOpen],
+        Action::SwitchApp { .. } => &[AppSwitch],
+        Action::Media { .. } => &[MediaKey],
+        Action::OpenUrl { .. } => &[OpenUrl],
+        Action::WebSearch { .. } => &[WebSearch],
+        Action::YoutubePlay { .. } => &[YoutubePlay],
+        Action::DocsNew { .. } => &[DocsOpen, DocsPaste],
+        Action::CalendarNewEvent { .. } => &[CalendarOpen, CalendarSave],
+    }
 }
 
-/// Risk of one op: DocsPaste Approve, CalendarSave = `risk_of(a)`, all others Safe (stub).
-#[allow(dead_code)] // stub: remove when wired (step 6)
-pub fn op_risk(_op: OpKind, _a: &Action) -> Risk {
-    todo!("step 6 inc 1")
+/// Risk of one op: DocsPaste Approve, CalendarSave = `risk_of(a)`, all others Safe.
+#[allow(dead_code)] // remove when wired (step 6 inc 3)
+pub fn op_risk(op: OpKind, a: &Action) -> Risk {
+    match op {
+        OpKind::DocsPaste => Risk::Approve,
+        OpKind::CalendarSave => risk_of(a),
+        OpKind::AppOpen
+        | OpKind::AppSwitch
+        | OpKind::MediaKey
+        | OpKind::YoutubePlay
+        | OpKind::DocsOpen
+        | OpKind::CalendarOpen
+        | OpKind::OpenUrl
+        | OpKind::WebSearch => Risk::Safe,
+    }
 }
 
 /// 0..=7 in table order.
