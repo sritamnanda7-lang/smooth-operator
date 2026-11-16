@@ -392,12 +392,13 @@ fn s06_manifest_is_mv3_with_a_key_two_permissions_and_nothing_risky() {
     assert!(key.len() > 100 && key.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'='), "key must be the base64 public key");
     let min: u32 = m["minimum_chrome_version"].as_str().expect("minimum_chrome_version").split('.').next().unwrap().parse().unwrap();
     assert!(min >= 116, "minimum_chrome_version must be >= 116, got {min}");
-    assert_eq!(m["permissions"], serde_json::json!(["storage", "alarms"]), "permissions exactly storage + alarms");
-    if let Some(h) = m.get("host_permissions") {
-        for x in h.as_array().expect("array") {
-            assert_eq!(x, "*://127.0.0.1/*", "host_permissions may only be *://127.0.0.1/* (the spike needs none)");
-        }
-    }
+    // Step 6 (approved Q4): + scripting and exactly three https hosts. step6_checks S1 is the source of truth.
+    assert_eq!(m["permissions"], serde_json::json!(["storage", "alarms", "scripting"]), "permissions exactly storage + alarms + scripting");
+    let mut hosts: Vec<&str> = m["host_permissions"].as_array().expect("host_permissions").iter().map(|x| x.as_str().unwrap()).collect();
+    hosts.sort();
+    assert_eq!(hosts, ["https://calendar.google.com/*", "https://docs.google.com/*", "https://www.youtube.com/*"]);
+    let then: serde_json::Value = serde_json::from_str(&String::from_utf8_lossy(&git_top(&["show", "step-5:chrome-extension/manifest.json"]).stdout)).expect("manifest at step-5");
+    assert_eq!(m["key"], then["key"], "the key must not change");
     for bad in ["content_scripts", "externally_connectable", "web_accessible_resources", "content_security_policy", "optional_permissions", "optional_host_permissions", "update_url"] {
         assert!(m.get(bad).is_none(), "manifest must not have {bad}");
     }

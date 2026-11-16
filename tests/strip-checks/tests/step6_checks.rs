@@ -335,3 +335,67 @@ fn s10_res_messages_are_built_only_in_protocol_js() {
     assert_none("\"res\" outside protocol.js", hits);
     assert!(read(&format!("{EXT}/lib/protocol.js")).contains("resMsg"), "protocol.js must export resMsg");
 }
+
+// ---- step5_checks.rs s06 was updated for step 6: its edit is pinned ----
+/// New-file line ranges of every hunk of a `git diff -U0` (a pure deletion counts as its line and the next).
+fn hunk_ranges(diff: &str) -> Vec<(usize, usize)> {
+    let mut out = vec![];
+    for l in diff.lines().filter(|l| l.starts_with("@@")) {
+        let plus = l.split_whitespace().find(|w| w.starts_with('+')).unwrap_or("+0");
+        let (c, d) = plus[1..].split_once(',').map_or((plus[1..].parse().unwrap_or(0), 1usize), |(a, b)| (a.parse().unwrap_or(0), b.parse().unwrap_or(0)));
+        out.push((c, if d == 0 { c + 1 } else { c + d - 1 }));
+    }
+    out
+}
+/// 1-based (start, end) lines of `fn name`, with its leading attribute and doc lines.
+fn fn_lines(src: &str, name: &str) -> (usize, usize) {
+    let lines: Vec<&str> = src.lines().collect();
+    let at = lines.iter().position(|l| l.contains(&format!("fn {name}("))).unwrap_or_else(|| panic!("fn {name} not found"));
+    let mut start = at;
+    while start > 0 && (lines[start - 1].trim_start().starts_with("#[") || lines[start - 1].trim_start().starts_with("///")) {
+        start -= 1;
+    }
+    let (mut depth, mut seen) = (0i32, false);
+    for (i, l) in lines.iter().enumerate().skip(at) {
+        for c in l.chars() {
+            match c {
+                '{' => {
+                    depth += 1;
+                    seen = true;
+                }
+                '}' => depth -= 1,
+                _ => {}
+            }
+        }
+        if seen && depth == 0 {
+            return (start + 1, i + 1);
+        }
+    }
+    panic!("unbalanced braces in fn {name}")
+}
+fn hunks_outside(diff: &str, allowed: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    hunk_ranges(diff).into_iter().filter(|h| !allowed.iter().any(|a| h.0 >= a.0 && h.1 <= a.1)).collect()
+}
+
+#[test]
+fn s11_the_step5_guard_can_fail() {
+    let diff = "@@ -10,2 +12,3 @@\n+a\n@@ -90 +100 @@\n-x\n+y\n";
+    assert_eq!(hunk_ranges(diff), vec![(12, 14), (100, 100)]);
+    assert_eq!(hunks_outside(diff, &[(10, 20)]), vec![(100, 100)], "a hunk outside the allowed function is reported");
+    assert!(hunks_outside(diff, &[(10, 20), (100, 100)]).is_empty());
+}
+
+#[test]
+fn s11_step5_checks_edit_is_only_the_s06_manifest_test_with_an_exact_size() {
+    require_tag();
+    let rel = "tests/strip-checks/tests/step5_checks.rs";
+    let diff = String::from_utf8_lossy(&git_top(&["diff", "-U0", BASE_TAG, "--", rel]).stdout).to_string();
+    let src = fs::read_to_string(p(rel)).unwrap();
+    let allowed = [fn_lines(&src, "s06_manifest_is_mv3_with_a_key_two_permissions_and_nothing_risky")];
+    let outside = hunks_outside(&diff, &allowed);
+    assert!(outside.is_empty(), "step5_checks.rs changed outside s06 (new-file lines {outside:?}); allowed {allowed:?}");
+    let count = |c: char| diff.lines().filter(|l| l.starts_with(c) && !l.starts_with("+++") && !l.starts_with("---")).count();
+    assert_eq!((count('+'), count('-')), (S5_ADDED, S5_REMOVED), "the exact edit size is pinned: another line needs a reviewer");
+}
+const S5_ADDED: usize = 7;
+const S5_REMOVED: usize = 6;
