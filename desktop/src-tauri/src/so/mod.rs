@@ -5,6 +5,7 @@
 pub mod actions;
 pub mod brain;
 pub mod commands;
+pub mod exec;
 pub mod fncheck;
 pub mod hotkey;
 pub mod link;

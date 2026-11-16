@@ -25,6 +25,55 @@ pub enum ExtMsg {
     Pair { code: String },
     Auth { proof: String, cnonce: String },
     Ping,
+    /// "res": keys t,v,id,r,ms only (step 6). No string field.
+    #[allow(dead_code)] // stub: remove when wired (step 6)
+    Result { id: u32, r: ResultCode, ms: u32 },
+}
+
+/// The 14 result codes the extension may answer with (step 6). Never page text, titles, URLs or ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub enum ResultCode {
+    Playing,
+    Ad,
+    Paused,
+    NoVideo,
+    EditorOpen,
+    NeedsLogin,
+    Consent,
+    NoAccess,
+    Timeout,
+    BadCmd,
+    Busy,
+    Unsafe,
+    Cancelled,
+    Error,
+}
+
+/// A command for the extension (step 6). URLs are built by `exec::ops`, never from page data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub enum Command {
+    YtPlay { url: String },
+    DocsOpen,
+    CalOpen { url: String },
+}
+
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub const MAX_CMD_ID: u32 = 2_147_483_647;
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub const MAX_RESULT_MS: u32 = 120_000;
+
+/// `{"t":"cmd","v":1,"id":N,"op":...}` (stub).
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub fn cmd_json(_id: u32, _c: &Command) -> String {
+    todo!("step 6 inc 2")
+}
+
+/// `{"t":"cancel","v":1,"id":N}` (stub).
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub fn cancel_json(_id: u32) -> String {
+    todo!("step 6 inc 2")
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

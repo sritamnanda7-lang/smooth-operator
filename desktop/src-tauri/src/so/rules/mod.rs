@@ -13,6 +13,7 @@ pub mod router;
 #[cfg(target_os = "macos")]
 pub mod real;
 
+use crate::so::brain::plan::Step;
 use crate::so::panel::Line;
 use std::time::Instant;
 
@@ -41,6 +42,18 @@ pub trait SlowRouter: Send + Sync {
     fn wants(&self, text: &str) -> bool;
     /// Blocks (network); never panics.
     fn think(&self, text: &str, stopped_at: Instant) -> Reply;
+    /// Like `think`, plus the parsed steps (step 6). Default: no steps. Brain and FakeFront override.
+    #[allow(dead_code)] // stub: remove when wired (step 6)
+    fn think_plan(&self, text: &str, stopped_at: Instant) -> (Reply, Vec<Step>) {
+        (self.think(text, stopped_at), Vec::new())
+    }
+}
+
+/// Runs a parsed plan (step 6: the executor).
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub trait PlanRunner: Send + Sync {
+    /// Blocks until the task ends; `show` writes lines for this talk. Returns hold seconds for the last lines.
+    fn run_plan(&self, steps: &[Step], show: &dyn Fn(Vec<Line>)) -> u64;
 }
 
 /// Shown at once while the brain works.

@@ -5,7 +5,7 @@
 use super::commands::{LinkState, LinkStatus};
 use super::pairing::{PairError, PairResult, Pairing, PairingView, Rng};
 use super::protocol::{
-    parse_ext, pong_json, status_json, AppState, BadMsg, ExtMsg, Untrusted, CLOSE_AUTH, CLOSE_BAD_MSG, CLOSE_PAIRED, CLOSE_REPLACED, CLOSE_TIMEOUT,
+    parse_ext, pong_json, Command, ResultCode, status_json, AppState, BadMsg, ExtMsg, Untrusted, CLOSE_AUTH, CLOSE_BAD_MSG, CLOSE_PAIRED, CLOSE_REPLACED, CLOSE_TIMEOUT,
 };
 use super::token::{nonce_hex, server_proof, verify_client_proof, LinkToken, TokenStore};
 use super::{metrics, LinkConfig};
@@ -238,7 +238,33 @@ async fn finish(ws: &mut Ws, code: u16) {
     .await;
 }
 
+/// Why `Link::request` gave no answer. The first three mean nothing was sent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub enum LinkError {
+    NotConnected,
+    Busy,
+    TooLong,
+    Timeout,
+    Lost,
+    Stopped,
+}
+
+/// A validated answer from the extension: the code and its duration in ms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub struct CmdReply {
+    pub r: ResultCode,
+    pub ms: u32,
+}
+
 impl Link {
+    /// Blocking: call from a plain thread, never inside the tokio runtime. One command in flight (stub).
+    #[allow(dead_code)] // stub: remove when wired (step 6)
+    pub fn request(&self, _cmd: &Command, _wait: Duration, _stop: &AtomicBool) -> Result<CmdReply, LinkError> {
+        todo!("step 6 inc 2")
+    }
+
     pub fn new(cfg: LinkConfig, tokens: Arc<dyn TokenStore>, clock: Arc<dyn Clock>, rng: Arc<dyn Rng>) -> Arc<Self> {
         Arc::new(Link {
             cfg,
@@ -420,7 +446,7 @@ impl Link {
         };
         // Pre-auth outcomes share one shape: tell the extension, log, close 4401.
         let (state, outcome) = match first.get() {
-            ExtMsg::Ping => {
+            ExtMsg::Ping | ExtMsg::Result { .. } => {
                 metrics::link(23, CLOSE_BAD_MSG, ms());
                 finish(&mut ws, CLOSE_BAD_MSG).await;
                 return;

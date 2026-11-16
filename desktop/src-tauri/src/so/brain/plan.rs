@@ -406,6 +406,34 @@ pub fn risk_of(a: &Action) -> Risk {
     }
 }
 
+/// One thing the executor does for a step (step 6). A step is a list of these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub enum OpKind {
+    AppOpen,
+    AppSwitch,
+    MediaKey,
+    YoutubePlay,
+    DocsOpen,
+    DocsPaste,
+    CalendarOpen,
+    CalendarSave,
+    OpenUrl,
+    WebSearch,
+}
+
+/// The fixed op list per action (stub: step 6 increment 1).
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub fn ops_of(_a: &Action) -> &'static [OpKind] {
+    todo!("step 6 inc 1")
+}
+
+/// Risk of one op: DocsPaste Approve, CalendarSave = `risk_of(a)`, all others Safe (stub).
+#[allow(dead_code)] // stub: remove when wired (step 6)
+pub fn op_risk(_op: OpKind, _a: &Action) -> Risk {
+    todo!("step 6 inc 1")
+}
+
 /// 0..=7 in table order.
 pub fn action_code(a: &Action) -> u8 {
     match a {
@@ -442,7 +470,7 @@ fn fit(prefix: &str, body: &str, suffix: &str) -> String {
     format!("{prefix}{body}{suffix}")
 }
 
-fn step_line(a: &Action) -> String {
+pub(crate) fn step_line(a: &Action) -> String {
     let plural = |n: usize| if n == 1 { "" } else { "s" };
     match a {
         Action::OpenApp { name } => fit("Open app: ", name, ""),

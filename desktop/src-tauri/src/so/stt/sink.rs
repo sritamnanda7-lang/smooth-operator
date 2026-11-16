@@ -290,6 +290,24 @@ impl SpeechSink {
         Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, Some(brain))
     }
 
+    /// Like `with_brain`, plus a plan runner (step 6 stub: runner not used yet).
+    #[allow(clippy::too_many_arguments)]
+    #[allow(dead_code)] // stub: remove when wired (step 6)
+    pub fn with_runner(
+        recorder: Arc<dyn Recorder>,
+        transcriber: Arc<dyn Transcriber>,
+        panel: Arc<dyn PanelOut>,
+        clock: Arc<dyn Clock>,
+        tap: Arc<dyn SpeechTap>,
+        stopper: Arc<dyn Stopper>,
+        hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
+        router: Arc<dyn TranscriptRouter>,
+        brain: Arc<dyn SlowRouter>,
+        _runner: Arc<dyn crate::so::rules::PlanRunner>,
+    ) -> Self {
+        Self::with_brain(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, brain)
+    }
+
     /// Debug builds only: a typed phrase enters as a new talk (talk id +1, `stopped_at` = now), then
     /// `deliver`, on its own thread so the caller returns at once. No "Listening" cue.
     #[cfg(debug_assertions)]
