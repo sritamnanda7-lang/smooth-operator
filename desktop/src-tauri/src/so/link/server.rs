@@ -5,18 +5,18 @@
 use super::commands::{LinkState, LinkStatus};
 use super::pairing::{PairError, PairResult, Pairing, PairingView, Rng};
 use super::protocol::{
-    parse_ext, pong_json, Command, ResultCode, status_json, AppState, BadMsg, ExtMsg, Untrusted, CLOSE_AUTH, CLOSE_BAD_MSG, CLOSE_PAIRED, CLOSE_REPLACED, CLOSE_TIMEOUT,
+    cancel_json, cmd_json, parse_ext, pong_json, Command, ResultCode, status_json, MAX_CMD_ID, MAX_RESULT_MS, AppState, BadMsg, ExtMsg, Untrusted, CLOSE_AUTH, CLOSE_BAD_MSG, CLOSE_PAIRED, CLOSE_REPLACED, CLOSE_TIMEOUT,
 };
 use super::token::{nonce_hex, server_proof, verify_client_proof, LinkToken, TokenStore};
 use super::{metrics, LinkConfig};
 use crate::so::hotkey::watcher::Clock;
 use futures_util::{SinkExt, StreamExt};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::oneshot;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::timeout_at;
 use tokio_tungstenite::tungstenite::handshake::server::{Callback, ErrorResponse, Request, Response};
 use tokio_tungstenite::tungstenite::http::StatusCode;
@@ -68,7 +68,18 @@ enum TokenState {
 struct AuthSlot {
     id: u64,
     close: oneshot::Sender<()>,
+    /// Commands and cancels for this session (capacity 1: one request in flight).
+    cmds: mpsc::Sender<Outgoing>,
 }
+
+/// What `Link::request` hands to the session task, which owns the socket.
+enum Outgoing {
+    /// `reply` closing (request gave up) before the send means the cmd is skipped.
+    Cmd { id: u32, json: String, reply: oneshot::Sender<Reply> },
+    Cancel { id: u32 },
+}
+
+type Reply = Result<CmdReply, LinkError>;
 
 struct Inner {
     pairing: Pairing,
@@ -93,6 +104,18 @@ pub struct Link {
     /// TCP connections still in their handshake.
     handshakes: AtomicUsize,
     next_id: AtomicUsize,
+    /// Command ids: 1.. increasing, never reused in a run, not even across sessions.
+    next_cmd: AtomicU32,
+    /// A request is in flight (one at a time).
+    in_flight: AtomicBool,
+}
+
+/// Frees `in_flight` on every exit path of `request`.
+struct FlightGuard<'a>(&'a AtomicBool);
+impl Drop for FlightGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
 }
 
 /// Drop guard: frees the pending slot on every exit path (success, close, client drop, timeout, panic).
@@ -240,7 +263,6 @@ async fn finish(ws: &mut Ws, code: u16) {
 
 /// Why `Link::request` gave no answer. The first three mean nothing was sent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // stub: remove when wired (step 6)
 pub enum LinkError {
     NotConnected,
     Busy,
@@ -252,17 +274,64 @@ pub enum LinkError {
 
 /// A validated answer from the extension: the code and its duration in ms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // stub: remove when wired (step 6)
 pub struct CmdReply {
     pub r: ResultCode,
     pub ms: u32,
 }
 
 impl Link {
-    /// Blocking: call from a plain thread, never inside the tokio runtime. One command in flight (stub).
-    #[allow(dead_code)] // stub: remove when wired (step 6)
-    pub fn request(&self, _cmd: &Command, _wait: Duration, _stop: &AtomicBool) -> Result<CmdReply, LinkError> {
-        todo!("step 6 inc 2")
+    /// Blocking: call from a plain thread, never inside the tokio runtime. One command in flight.
+    /// Polls every 10 ms so the stop flag ends the wait fast; the socket itself is owned by the session task.
+    #[allow(dead_code)] // wired in step 6 inc 4 (LinkBrowser)
+    pub fn request(&self, cmd: &Command, wait: Duration, stop: &AtomicBool) -> Result<CmdReply, LinkError> {
+        if self.in_flight.swap(true, Ordering::SeqCst) {
+            return Err(LinkError::Busy);
+        }
+        let _free = FlightGuard(&self.in_flight);
+        let Some(tx) = self.lock().auth.as_ref().map(|a| a.cmds.clone()) else { return Err(LinkError::NotConnected) };
+        // Ids run out after 2^31 commands: fail closed rather than wrap and reuse one.
+        let Ok(id) = self.next_cmd.try_update(Ordering::SeqCst, Ordering::SeqCst, |n| (n <= MAX_CMD_ID).then_some(n + 1)) else {
+            return Err(LinkError::Busy); // not NotConnected: the executor retries that
+        };
+        let json = cmd_json(id, cmd);
+        if json.len() > self.cfg.max_msg {
+            return Err(LinkError::TooLong);
+        }
+        let (reply, mut answer) = oneshot::channel();
+        tx.try_send(Outgoing::Cmd { id, json, reply }).map_err(|e| match e {
+            mpsc::error::TrySendError::Full(_) => LinkError::Busy,
+            mpsc::error::TrySendError::Closed(_) => LinkError::NotConnected,
+        })?;
+        // Capped so a huge `wait` can never overflow `Instant`.
+        let end = Instant::now() + wait.min(Duration::from_millis(u64::from(MAX_RESULT_MS) + 5_000));
+        // A cancel that does not fit (cmd still queued) is fine: the session skips a cmd whose request is gone.
+        let cancel = |e: LinkError| {
+            let _ = tx.try_send(Outgoing::Cancel { id });
+            Err(e)
+        };
+        loop {
+            match answer.try_recv() {
+                Ok(r) => return r,
+                Err(oneshot::error::TryRecvError::Closed) => return Err(LinkError::Lost),
+                Err(oneshot::error::TryRecvError::Empty) => {}
+            }
+            if stop.load(Ordering::SeqCst) {
+                return cancel(LinkError::Stopped);
+            }
+            let left = end.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return cancel(LinkError::Timeout);
+            }
+            std::thread::sleep(left.min(Duration::from_millis(10)));
+        }
+    }
+
+    /// The link state without a pairing view (for the executor's order: pair text, port text, Keychain text).
+    /// WARNING: blocks on the first Keychain read, and answers a false `KeychainError` while another read is
+    /// in flight. Do NOT call it from the talk thread until step 6 inc 4 fixes this (tests first).
+    #[allow(dead_code)] // wired in step 6 inc 4 (LinkBrowser)
+    pub fn state(&self) -> LinkState {
+        self.status().state
     }
 
     pub fn new(cfg: LinkConfig, tokens: Arc<dyn TokenStore>, clock: Arc<dyn Clock>, rng: Arc<dyn Rng>) -> Arc<Self> {
@@ -275,6 +344,8 @@ impl Link {
             read_in_flight: Arc::new(AtomicBool::new(false)),
             handshakes: AtomicUsize::new(0),
             next_id: AtomicUsize::new(1),
+            next_cmd: AtomicU32::new(1),
+            in_flight: AtomicBool::new(false),
         })
     }
 
@@ -379,9 +450,9 @@ impl Link {
     }
 
     /// Makes `tx` the authenticated session; an older one is told to close (4409).
-    fn register(self: &Arc<Self>, tx: oneshot::Sender<()>) -> AuthGuard {
+    fn register(self: &Arc<Self>, tx: oneshot::Sender<()>, cmds: mpsc::Sender<Outgoing>) -> AuthGuard {
         let id = self.next_id.fetch_add(1, Ordering::SeqCst) as u64;
-        if let Some(old) = self.lock().auth.replace(AuthSlot { id, close: tx }) {
+        if let Some(old) = self.lock().auth.replace(AuthSlot { id, close: tx, cmds }) {
             let _ = old.close.send(());
         }
         AuthGuard { link: self.clone(), id }
@@ -487,11 +558,12 @@ impl Link {
                 Read::Refused => (AppState::Rejected, 21),
                 Read::Proved(app_proof) => {
                     let (tx, rx) = oneshot::channel();
-                    let _auth = self.register(tx);
+                    let (cmd_tx, cmd_rx) = mpsc::channel(1);
+                    let _auth = self.register(tx, cmd_tx);
                     drop(pending);
                     if send_state(&mut ws, &AppState::AuthOk { proof: app_proof }).await {
                         metrics::link(20, 0, ms());
-                        self.authenticated(&mut ws, rx, t0).await;
+                        self.authenticated(&mut ws, rx, cmd_rx, t0).await;
                     }
                     return;
                 }
@@ -550,46 +622,105 @@ impl Link {
         }
     }
 
-    /// The authenticated session: ping/pong, idle timeout, and "replaced" (4409).
-    async fn authenticated(&self, ws: &mut Ws, mut replaced: oneshot::Receiver<()>, t0: Instant) {
+    /// The authenticated session: ping/pong, commands out, results in, idle timeout, "replaced" (4409).
+    /// The request in flight is dropped (= Lost) before the close handshake, so the caller learns at once.
+    async fn authenticated(&self, ws: &mut Ws, replaced: oneshot::Receiver<()>, cmds: mpsc::Receiver<Outgoing>, t0: Instant) {
+        let mut pending: Option<(u32, oneshot::Sender<Reply>)> = None;
+        let close = self.session(ws, replaced, cmds, &mut pending, t0).await;
+        drop(pending);
+        if let Some(code) = close {
+            finish(ws, code).await;
+        }
+    }
+
+    /// Returns the close code to send, or `None` when the socket is already gone.
+    async fn session(
+        &self,
+        ws: &mut Ws,
+        mut replaced: oneshot::Receiver<()>,
+        mut cmds: mpsc::Receiver<Outgoing>,
+        pending: &mut Option<(u32, oneshot::Sender<Reply>)>,
+        t0: Instant,
+    ) -> Option<u16> {
+        enum Ev {
+            Out(Outgoing),
+            In(Result<Got, tokio::time::error::Elapsed>),
+        }
         let ms = || t0.elapsed().as_millis() as u64;
         let idle = self.cfg.idle_timeout;
+        // Only messages FROM the extension move this: sending a cmd must not keep a dead session alive.
         let mut idle_end = tokio::time::Instant::now() + idle;
+        // Pending id (0 = none) for which an unexpected result was already logged: no log flood.
+        let mut logged_31: Option<u32> = None;
         loop {
-            let got = tokio::select! {
+            let ev = tokio::select! {
+                biased;
                 _ = &mut replaced => {
                     metrics::link(26, CLOSE_REPLACED, ms());
-                    finish(ws, CLOSE_REPLACED).await;
-                    return;
+                    return Some(CLOSE_REPLACED);
                 }
-                r = timeout_at(idle_end, next_ext(ws, self.cfg.max_msg)) => r,
+                Some(o) = cmds.recv() => Ev::Out(o),
+                r = timeout_at(idle_end, next_ext(ws, self.cfg.max_msg)) => Ev::In(r),
             };
-            match got {
-                Err(_) => {
+            match ev {
+                Ev::Out(Outgoing::Cmd { id, json, reply }) => {
+                    if reply.is_closed() {
+                        continue;
+                    }
+                    if !send_text(ws, json).await {
+                        return None;
+                    }
+                    metrics::link(30, 0, ms());
+                    *pending = Some((id, reply));
+                }
+                Ev::Out(Outgoing::Cancel { id }) => {
+                    if !send_text(ws, cancel_json(id)).await {
+                        return None;
+                    }
+                    if pending.as_ref().is_some_and(|p| p.0 == id) {
+                        *pending = None;
+                    }
+                }
+                Ev::In(Err(_)) => {
                     metrics::link(25, 1000, ms());
-                    finish(ws, 1000).await;
-                    return;
+                    return Some(1000);
                 }
-                Ok(Got::Gone) => {
+                Ev::In(Ok(Got::Gone)) => {
                     metrics::link(25, 0, ms());
-                    return;
+                    return None;
                 }
-                Ok(Got::Bad(code, outcome)) => {
+                Ev::In(Ok(Got::Bad(code, outcome))) => {
                     metrics::link(outcome, code, ms());
-                    finish(ws, code).await;
-                    return;
+                    return Some(code);
                 }
-                Ok(Got::Msg(m)) => match m.get() {
+                Ev::In(Ok(Got::Msg(m))) => match m.get() {
                     ExtMsg::Ping => {
                         if !send_text(ws, pong_json()).await {
-                            return;
+                            return None;
                         }
                         idle_end = tokio::time::Instant::now() + idle;
                     }
+                    ExtMsg::Result { id, r, ms: took } => {
+                        idle_end = tokio::time::Instant::now() + idle;
+                        match pending.take() {
+                            Some((pid, reply)) if pid == *id && !reply.is_closed() => {
+                                let _ = reply.send(Ok(CmdReply { r: *r, ms: *took }));
+                                metrics::link(32, 0, ms());
+                            }
+                            other => {
+                                // A match whose request already gave up is ignored too (31, never 32).
+                                let key = other.as_ref().map_or(0, |p| p.0);
+                                *pending = other;
+                                if logged_31 != Some(key) {
+                                    logged_31 = Some(key);
+                                    metrics::link(31, 0, ms());
+                                }
+                            }
+                        }
+                    }
                     _ => {
                         metrics::link(23, CLOSE_BAD_MSG, ms());
-                        finish(ws, CLOSE_BAD_MSG).await;
-                        return;
+                        return Some(CLOSE_BAD_MSG);
                     }
                 },
             }
