@@ -17,7 +17,7 @@ export const SCAN_POLL = 200;
 export const PLAYER_POLL = 500;
 export const PAGE_POLL = 250;
 export const LOGIN_CHECKS = 2; // tab complete but URL unreadable this many polls in a row = Google wants the user
-export const NONE_CHECKS = 2; // an empty results list this many polls in a row = no video (it may still be rendering)
+export const EMPTY_WAIT = 2000; // results list empty this long without a break = no video (it may still be rendering)
 export const ACTIVE_TAB = true; // spike Z1: a background tab did not load
 export const TRY_PLAY = false; // spike Z1: the video played by itself in a foreground tab, so no video.play()
 export const DOCS_URL = "https://docs.new/";

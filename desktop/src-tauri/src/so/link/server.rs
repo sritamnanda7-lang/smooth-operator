@@ -343,6 +343,28 @@ impl Link {
         }
     }
 
+    /// One guarded token read for the executor's plain thread, so the first task (not app launch) is what may
+    /// show a Keychain prompt. The read runs on its own thread; we wait 300 ms at most, so a blocked Keychain can
+    /// never hold up stop. Still unknown after that (or a read already running) reads as `NotFound` in `state()`.
+    pub fn settle_token_state(self: &Arc<Self>) {
+        if self.lock().token != TokenState::Unknown {
+            return;
+        }
+        let Some(flag) = ReadFlag::take(&self.read_in_flight) else { return };
+        let (done, wait) = std::sync::mpsc::channel();
+        let link = self.clone();
+        // A failed spawn drops the closure, which frees the flag; the state just stays unknown.
+        let _ = std::thread::Builder::new().name("so-token-read".into()).spawn(move || {
+            let _flag = flag;
+            link.set_token(match link.tokens.get() {
+                Ok(t) => TokenState::Exists(t.is_some()),
+                Err(_) => TokenState::KeychainError,
+            });
+            let _ = done.send(());
+        });
+        let _ = wait.recv_timeout(Duration::from_millis(300));
+    }
+
     pub fn new(cfg: LinkConfig, tokens: Arc<dyn TokenStore>, clock: Arc<dyn Clock>, rng: Arc<dyn Rng>) -> Arc<Self> {
         Arc::new(Link {
             cfg,

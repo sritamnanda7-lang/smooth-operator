@@ -2,11 +2,22 @@
 // Runs one page job at a time (yt_play, docs_open, cal_open) and answers with a result code from R.
 // Only fixed words and numbers leave this file: never a URL, title or page text. Every browser call is
 // raced against the cancel signal, so cancel() ends a job at once even if the browser call never settles.
-import { ACTIVE_TAB, AD_WAIT, CAL_EDIT_RE, DOCS_EDIT_RE, DOCS_URL, LOGIN_CHECKS, NONE_CHECKS, PAGE_POLL, PAGE_WAIT, PLAYER_POLL, PLAY_WAIT, RESULTS_WAIT, JOB_MAX, JOB_TICK, SCAN_POLL, TRY_PLAY, VIDEO_ID_RE, WATCH_WAIT } from "./config.js";
+import { ACTIVE_TAB, AD_WAIT, EMPTY_WAIT, CAL_EDIT_RE, DOCS_EDIT_RE, DOCS_URL, LOGIN_CHECKS, PAGE_POLL, PAGE_WAIT, PLAYER_POLL, PLAY_WAIT, RESULTS_WAIT, JOB_MAX, JOB_TICK, SCAN_POLL, TRY_PLAY, VIDEO_ID_RE, WATCH_WAIT } from "./config.js";
 import { SEL, ytPlay, ytPlayer, ytScan } from "./page.js";
 import { R } from "./protocol.js";
 
 const HOST = { yt_play: "https://www.youtube.com/*", docs_open: "https://docs.google.com/*", cal_open: "https://calendar.google.com/*" };
+
+/** Same origin + path and the one param `key` equal to the expected URL's; other params, %20 vs +, :443, host case are fine. */
+function sameUrl(got, want, key) {
+  try {
+    const g = new URL(got);
+    const w = new URL(want);
+    return g.origin === w.origin && g.pathname === w.pathname && w.searchParams.get(key) !== null && g.searchParams.get(key) === w.searchParams.get(key);
+  } catch {
+    return false;
+  }
+}
 
 /** Thrown to end a job with a result code. */
 class Done {
@@ -66,15 +77,15 @@ export function makeTasks({ chrome, ready, now, sleep }) {
 
     // yt_play: results page -> first real video -> watch page -> is it playing
     const tabId = await open(cmd.url, true);
-    await waitUrl(tabId, (u) => u === cmd.url, SCAN_POLL, PAGE_WAIT); // never scan the old document
+    await waitUrl(tabId, (u) => sameUrl(u, cmd.url, "search_query"), SCAN_POLL, PAGE_WAIT); // never scan the old document
     const scanEnd = now() + RESULTS_WAIT;
     let id = null;
-    let none = 0;
+    let emptySince = null; // when the results list was first seen empty, in a row
     while (id === null) {
       const r = await page(tabId, ytScan, [SEL, cmd.query]);
       if (r?.s === "consent") return R.consent;
-      none = r?.s === "none" ? none + 1 : 0;
-      if (none >= NONE_CHECKS) return R.no_video;
+      emptySince = r?.s === "none" ? emptySince ?? now() : null; // a wait or a hit resets it
+      if (emptySince !== null && now() - emptySince >= EMPTY_WAIT) return R.no_video;
       if (r?.s === "found") {
         if (typeof r.id !== "string" || !VIDEO_ID_RE.test(r.id)) return R.error; // the page misbehaves: never navigate on its word
         id = r.id;
@@ -83,7 +94,7 @@ export function makeTasks({ chrome, ready, now, sleep }) {
     }
     const watch = `https://www.youtube.com/watch?v=${id}`;
     await call(chrome.tabs.update(tabId, { url: watch }));
-    await waitUrl(tabId, (u) => u === watch, SCAN_POLL, PAGE_WAIT);
+    await waitUrl(tabId, (u) => sameUrl(u, watch, "v"), SCAN_POLL, PAGE_WAIT);
 
     const start = now();
     let adSince = null;

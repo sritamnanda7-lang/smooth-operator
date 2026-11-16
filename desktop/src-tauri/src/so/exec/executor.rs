@@ -156,8 +156,9 @@ impl Executor {
         if steps.len() > MAX_STEPS {
             // Too long a plan: nothing runs.
             let first = steps.first().and_then(|s| ops_of(&s.action).first().copied()).unwrap_or(OpKind::OpenUrl);
-            done.push(StepResult { first, res: Res::Refused, tail: Tail::None });
-            texts.push(result_text(&done[0], false));
+            let sr = StepResult { first, res: Res::Refused, tail: Tail::None };
+            texts.push(result_text(&sr, false));
+            done.push(sr);
             metrics::exec(2, op_code(first), Res::Refused.code(), 0, 0);
         } else {
             for (i, step) in steps.iter().enumerate() {

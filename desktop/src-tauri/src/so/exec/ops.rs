@@ -32,10 +32,11 @@ pub fn cal_url(title: &str, date: &str, time: &str, minutes: Option<u16>, wall: 
     let time = NaiveTime::parse_from_str(time, "%H:%M").map_err(|_| Res::Failed)?;
     let day = resolve_date(date, now, time).ok_or(Res::Failed)?;
     let start_local = day.and_time(time);
-    let now_utc = match wall.to_utc(now) {
+    // Ambiguous now: the later instant for PastTime (a start is never wrongly "future"), the earlier for TooFar.
+    let (now_utc, now_early) = match wall.to_utc(now) {
         LocalResult::None => return Err(Res::Failed),
-        LocalResult::Single(t) => t,
-        LocalResult::Ambiguous(a, b) => a.max(b), // ambiguous now: the later instant, so a start is never wrongly "future"
+        LocalResult::Single(t) => (t, t),
+        LocalResult::Ambiguous(a, b) => (a.max(b), a.min(b)),
     };
     let start = match wall.to_utc(start_local) {
         LocalResult::None => return Err(Res::NoSuchTime),
@@ -45,7 +46,7 @@ pub fn cal_url(title: &str, date: &str, time: &str, minutes: Option<u16>, wall: 
     if start <= now_utc {
         return Err(Res::PastTime);
     }
-    if start > now_utc.checked_add_signed(Duration::days(MAX_DAYS_AHEAD)).ok_or(Res::Failed)? {
+    if start > now_early.checked_add_signed(Duration::days(MAX_DAYS_AHEAD)).ok_or(Res::Failed)? {
         return Err(Res::TooFar);
     }
     if !(5..=480).contains(&minutes.unwrap_or(60)) {

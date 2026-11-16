@@ -23,6 +23,7 @@ pub struct LinkBrowser(pub Arc<Link>);
 
 impl Browser for LinkBrowser {
     fn link_state(&self) -> LinkState {
+        self.0.settle_token_state();
         self.0.state()
     }
     fn request(&self, cmd: &Command, wait: Duration, stop: &AtomicBool) -> Result<CmdReply, LinkError> {
