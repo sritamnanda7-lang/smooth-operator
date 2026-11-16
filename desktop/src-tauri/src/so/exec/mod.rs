@@ -13,6 +13,7 @@ pub mod real;
 
 use crate::so::brain::plan::OpKind;
 use crate::so::link::protocol::ResultCode;
+use crate::so::link::PORT_BUSY_TEXT;
 use std::time::Duration;
 
 /// Every limit in one place so tests can use short ones.
@@ -72,13 +73,51 @@ pub enum Res {
 }
 
 impl Res {
-    /// Fixed integer for the log (stub).
+    /// Fixed integer for the log (never changes meaning once shipped).
     pub fn code(&self) -> u8 {
-        todo!("step 6 inc 3")
+        use ResultCode as R;
+        match self {
+            Res::Done => 1,
+            Res::Ext(c) => match c {
+                R::Playing => 10,
+                R::Ad => 11,
+                R::Paused => 12,
+                R::NoVideo => 13,
+                R::EditorOpen => 14,
+                R::NeedsLogin => 15,
+                R::Consent => 16,
+                R::NoAccess => 17,
+                R::Timeout => 18,
+                R::BadCmd => 19,
+                R::Busy => 20,
+                R::Unsafe => 21,
+                R::Cancelled => 22,
+                R::Error => 23,
+            },
+            Res::ChromeMissing => 30,
+            Res::NotPaired => 31,
+            Res::NotConnected => 32,
+            Res::PortBusy => 33,
+            Res::KeychainError => 34,
+            Res::LinkTimeout => 35,
+            Res::Lost => 36,
+            Res::BadResult => 37,
+            Res::TooLong => 38,
+            Res::PastTime => 39,
+            Res::NoSuchTime => 40,
+            Res::TooFar => 41,
+            Res::AppNotFound => 42,
+            Res::AppAmbiguous => 43,
+            Res::Failed => 44,
+            Res::NotYet => 45,
+            Res::Refused => 46,
+            Res::Stopped => 47,
+            Res::Deadline => 48,
+        }
     }
-    /// True: Done, Ext(Playing | Ad | Paused | EditorOpen) (stub).
+    /// True: Done, Ext(Playing | Ad | Paused | EditorOpen).
     pub fn ok(&self) -> bool {
-        todo!("step 6 inc 3")
+        matches!(self, Res::Done | Res::Ext(ResultCode::Playing | ResultCode::Ad | ResultCode::Paused | ResultCode::EditorOpen))
     }
 }
 
@@ -97,7 +136,58 @@ pub struct StepResult {
     pub tail: Tail,
 }
 
-/// The fixed panel text for a step result (stub).
-pub fn result_text(_s: &StepResult, _guests_named: bool) -> String {
-    todo!("step 6 inc 3")
+pub const PAIR_TEXT: &str = "Fix connection: pair the extension in Settings → General → Chrome extension";
+pub const NOT_CONNECTED_TEXT: &str = "Fix connection: open Chrome and check the Smooth Operator extension is on";
+pub const CONNECTING_TEXT: &str = "Connecting to Chrome…";
+pub const BUSY_TEXT: &str = "Still working on the last task";
+const KEYCHAIN_TEXT: &str = "Can't read the Chrome link key from the Keychain. Unlock your Mac and try again.";
+const DOCS_TEXT: &str = "Blank Google Doc opened. Writing the text comes in a later update";
+const CAL_TEXT: &str = "Event filled in, not saved: check it in Chrome";
+const GUESTS_SENTENCE: &str = "Guests are added in a later update";
+const LOGIN_TEXT: &str = "Google needs you in Chrome (sign-in or consent): finish it, then try again";
+const NO_ACCESS_TEXT: &str =
+    "Allow the Smooth Operator extension on YouTube and Google sites: chrome://extensions → Details → Site access";
+const FAILED_TEXT: &str = "That step failed: try again";
+
+/// The fixed panel text for a step result. Never contains a URL, page text or extension string.
+/// (App names and the "Not available yet" step line are added by the executor, which knows the action.)
+pub fn result_text(s: &StepResult, guests_named: bool) -> String {
+    use ResultCode as R;
+    let t = match s.res {
+        Res::Done => "Done",
+        Res::Ext(R::Playing) => "Playing on YouTube",
+        Res::Ext(R::Ad) => "An ad is playing; your video starts after it",
+        Res::Ext(R::Paused) => "Video opened but paused: press play in Chrome",
+        Res::Ext(R::NoVideo) => "No playable video found for that search",
+        Res::Ext(R::EditorOpen) => {
+            if s.first == OpKind::CalendarOpen {
+                return if guests_named { format!("{CAL_TEXT}. {GUESTS_SENTENCE}") } else { CAL_TEXT.to_string() };
+            }
+            DOCS_TEXT
+        }
+        Res::Ext(R::NeedsLogin | R::Consent) => LOGIN_TEXT,
+        Res::Ext(R::NoAccess) => NO_ACCESS_TEXT,
+        Res::Ext(R::Timeout) => "Chrome didn't finish loading: try again",
+        Res::NotYet => "Not available yet",
+        Res::Refused => "Blocked: handed back to you",
+        Res::ChromeMissing => "Google Chrome not found: install it for web tasks",
+        Res::NotPaired => PAIR_TEXT,
+        Res::NotConnected => NOT_CONNECTED_TEXT,
+        Res::PortBusy => PORT_BUSY_TEXT,
+        Res::KeychainError => KEYCHAIN_TEXT,
+        Res::PastTime => "That time has already passed",
+        Res::NoSuchTime => "That time doesn't exist (clock change)",
+        Res::TooFar => "That date is too far ahead",
+        Res::AppNotFound => "I couldn't find that app",
+        Res::AppAmbiguous => "More than one app matches: say the full name",
+        Res::Stopped => "Stopped",
+        Res::Deadline => "Took too long: stopped",
+        Res::Ext(R::BadCmd | R::Busy | R::Unsafe | R::Cancelled | R::Error)
+        | Res::LinkTimeout
+        | Res::Lost
+        | Res::BadResult
+        | Res::TooLong
+        | Res::Failed => FAILED_TEXT,
+    };
+    t.to_string()
 }

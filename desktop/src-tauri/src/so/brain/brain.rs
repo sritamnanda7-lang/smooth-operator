@@ -6,7 +6,7 @@ use super::config::valid_model;
 use super::http::{with_retry, RETRY};
 use super::keys::{ApiKey, KeyStore};
 use super::metrics;
-use super::plan::{self, action_code, BrainOutput, Reject};
+use super::plan::{self, action_code, BrainOutput, Reject, Step};
 use super::prompt::{self, MAX_TRANSCRIPT_CHARS};
 use super::provider::{Provider, ProviderError, ProviderId, PROVIDERS};
 use crate::so::hotkey::watcher::Clock;
@@ -78,11 +78,13 @@ struct Outcome {
     http: u16,
     reject: u8,
     actions: Vec<u8>,
+    /// The parsed steps (risk set by code); empty unless the reply was a plan.
+    plan: Vec<Step>,
 }
 
 impl Outcome {
     fn warn(code: u8, text: &str) -> Outcome {
-        Outcome { code, lines: vec![Line::new(text, Kind::Warn)], hold: ERROR_SECS, steps: 0, http: 0, reject: 0, actions: Vec::new() }
+        Outcome { code, lines: vec![Line::new(text, Kind::Warn)], hold: ERROR_SECS, steps: 0, http: 0, reject: 0, actions: Vec::new(), plan: Vec::new() }
     }
 }
 
@@ -176,11 +178,11 @@ impl Brain {
         match plan::parse(raw) {
             Err(r) => bad_reply(r),
             Ok(out) => {
-                let (code, steps, actions) = match &out {
-                    BrainOutput::Plan(steps) => (1, steps.len().min(255) as u8, steps.iter().map(|s| action_code(&s.action)).collect()),
-                    BrainOutput::Question(_) => (2, 0, Vec::new()),
+                let (code, steps, actions, plan) = match &out {
+                    BrainOutput::Plan(steps) => (1, steps.len().min(255) as u8, steps.iter().map(|s| action_code(&s.action)).collect(), steps.clone()),
+                    BrainOutput::Question(_) => (2, 0, Vec::new(), Vec::new()),
                 };
-                Outcome { code, lines: plan::render(&out), hold: PLAN_SECS, steps, http: 0, reject: 0, actions }
+                Outcome { code, lines: plan::render(&out), hold: PLAN_SECS, steps, http: 0, reject: 0, actions, plan }
             }
         }
     }
@@ -201,16 +203,21 @@ impl SlowRouter for Brain {
     }
 
     fn think(&self, text: &str, stopped_at: Instant) -> Reply {
+        self.think_plan(text, stopped_at).0
+    }
+
+    /// The same lines as `think`, plus the parsed steps.
+    fn think_plan(&self, text: &str, stopped_at: Instant) -> (Reply, Vec<Step>) {
         let ms = |clock: &Arc<dyn Clock>| clock.now().saturating_duration_since(stopped_at).as_millis() as u64;
         if text.chars().count() > MAX_TRANSCRIPT_CHARS {
             metrics::brain(10, 0, ms(&self.clock), 0, 0, 0, &[]);
-            return Reply { lines: vec![Line::new(TOO_LONG_TEXT, Kind::Info)], hold_secs: ERROR_SECS };
+            return (Reply { lines: vec![Line::new(TOO_LONG_TEXT, Kind::Info)], hold_secs: ERROR_SECS }, Vec::new());
         }
         let slot = match self.admit() {
             Ok(slot) => slot,
             Err(o) => {
                 metrics::brain(o.code, 0, ms(&self.clock), 0, 0, 0, &[]);
-                return Reply { lines: o.lines, hold_secs: o.hold };
+                return (Reply { lines: o.lines, hold_secs: o.hold }, Vec::new());
             }
         };
         // A panic anywhere in the call is caught: the talk shows one fixed line, the slot is freed.
@@ -218,6 +225,6 @@ impl SlowRouter for Brain {
             .unwrap_or_else(|_| (Outcome::warn(14, FAILED_TEXT), 0));
         drop(slot);
         metrics::brain(o.code, pcode, ms(&self.clock), o.steps, o.http, o.reject, &o.actions);
-        Reply { lines: o.lines, hold_secs: o.hold }
+        (Reply { lines: o.lines, hold_secs: o.hold }, o.plan)
     }
 }

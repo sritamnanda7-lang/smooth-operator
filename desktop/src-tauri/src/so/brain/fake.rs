@@ -2,12 +2,13 @@
 //! Debug builds only (this module is `#[cfg(debug_assertions)]`): a phrase-driven fake provider with no
 //! network and no key, for manual runs. Every reply goes through the REAL parser and pipeline.
 //! Phrases (start of the command): "fake question", "fake garbage", "fake risk", "fake slow" (25 s),
-//! "fake 401", "fake 429", "fake 500", "fake offline", "fake spend", "fake nokey". Anything else gives a
-//! valid two-step plan.
+//! "fake 401", "fake 429", "fake 500", "fake offline", "fake spend", "fake nokey", and (step 6 manual runs)
+//! "fake play", "fake docs", "fake calendar", "fake chain", "fake url". Anything else gives a valid two-step plan.
 
 use super::brain::{Brain, BrainChoice, Limits};
 use super::keys::{ApiKey, KeyStore, MemoryKeyStore};
 use super::provider::{BrainRequest, Provider, ProviderError, ProviderId};
+use super::plan::Step;
 use crate::so::rules::{Reply, SlowRouter};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,6 +17,11 @@ pub const ENV_FLAG: &str = "SO_BRAIN_FAKE";
 
 const FAKE_KEY: &str = "FAKE-KEY-for-debug-runs-only-0000";
 const DEFAULT_PLAN: &str = r#"{"v":1,"kind":"plan","steps":[{"action":"youtube_play","args":{"query":"Blinding Lights"}},{"action":"media","args":{"key":"next"}}]}"#;
+const PLAY_PLAN: &str = r#"{"v":1,"kind":"plan","steps":[{"action":"youtube_play","args":{"query":"Blinding Lights"}}]}"#;
+const DOCS_PLAN: &str = r#"{"v":1,"kind":"plan","steps":[{"action":"docs_new","args":{"topic":"Causes of WWII","words":300}}]}"#;
+const CALENDAR_PLAN: &str = r#"{"v":1,"kind":"plan","steps":[{"action":"calendar_new_event","args":{"title":"Review","date":"tomorrow","time":"15:00"}}]}"#;
+const CHAIN_PLAN: &str = r#"{"v":1,"kind":"plan","steps":[{"action":"calendar_new_event","args":{"title":"Sync","date":"friday","time":"10:00"}},{"action":"youtube_play","args":{"query":"Halo"}}]}"#;
+const URL_PLAN: &str = r#"{"v":1,"kind":"plan","steps":[{"action":"open_url","args":{"url":"https://example.com/a"}}]}"#;
 const QUESTION: &str = r#"{"v":1,"kind":"question","question":"Which one do you mean?"}"#;
 const RISK_PLAN: &str = r#"{"v":1,"kind":"plan","steps":[{"action":"docs_new","args":{"topic":"t"},"risk":"safe"}]}"#;
 
@@ -66,6 +72,16 @@ impl Provider for FakeProvider {
             Err(ProviderError::Offline)
         } else if starts("fake spend") {
             Err(ProviderError::SpendLimit)
+        } else if starts("fake play") {
+            Ok(PLAY_PLAN.to_string())
+        } else if starts("fake docs") {
+            Ok(DOCS_PLAN.to_string())
+        } else if starts("fake calendar") {
+            Ok(CALENDAR_PLAN.to_string())
+        } else if starts("fake chain") {
+            Ok(CHAIN_PLAN.to_string())
+        } else if starts("fake url") {
+            Ok(URL_PLAN.to_string())
         } else {
             Ok(DEFAULT_PLAN.to_string())
         }
@@ -89,17 +105,21 @@ impl SlowRouter for FakeFront {
     }
 
     fn think(&self, text: &str, stopped_at: Instant) -> Reply {
+        self.think_plan(text, stopped_at).0
+    }
+
+    fn think_plan(&self, text: &str, stopped_at: Instant) -> (Reply, Vec<Step>) {
         let no_key = text.trim().to_lowercase().starts_with("fake nokey");
         if no_key {
             let _ = self.keys.delete(ProviderId::Gemini);
         }
-        let reply = self.brain.think(text, stopped_at);
+        let out = self.brain.think_plan(text, stopped_at);
         if no_key {
             if let Ok(k) = ApiKey::parse(FAKE_KEY) {
                 let _ = self.keys.set(ProviderId::Gemini, &k);
             }
         }
-        reply
+        out
     }
 }
 

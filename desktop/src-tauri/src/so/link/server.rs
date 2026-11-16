@@ -327,11 +327,22 @@ impl Link {
     }
 
     /// The link state without a pairing view (for the executor's order: pair text, port text, Keychain text).
-    /// WARNING: blocks on the first Keychain read, and answers a false `KeychainError` while another read is
-    /// in flight. Do NOT call it from the talk thread until step 6 inc 4 fixes this (tests first).
+    /// Never blocks and never reads the Keychain: an unknown token or a read in flight reads as `NotFound`
+    /// (the executor's link wait settles it). `KeychainError` only after a read failed.
     #[allow(dead_code)] // wired in step 6 inc 4 (LinkBrowser)
     pub fn state(&self) -> LinkState {
-        self.status().state
+        let g = self.lock();
+        if g.port_busy {
+            LinkState::PortBusy
+        } else if g.auth.is_some() {
+            LinkState::Connected
+        } else {
+            match g.token {
+                TokenState::Exists(false) => LinkState::NotPaired,
+                TokenState::KeychainError => LinkState::KeychainError,
+                TokenState::Exists(true) | TokenState::Unknown => LinkState::NotFound,
+            }
+        }
     }
 
     pub fn new(cfg: LinkConfig, tokens: Arc<dyn TokenStore>, clock: Arc<dyn Clock>, rng: Arc<dyn Rng>) -> Arc<Self> {

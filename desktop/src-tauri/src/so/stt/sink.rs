@@ -25,7 +25,7 @@ use super::{HEARD_SECS, MIC_OPEN_AT, MicOpenAt};
 use crate::so::hotkey::session::{Mode, TalkEvent};
 use crate::so::hotkey::watcher::{Clock, TalkSink};
 use crate::so::brain::metrics as brain_metrics;
-use crate::so::rules::{metrics as rules_metrics, PassThrough, Route, SlowRouter, TranscriptRouter, THINKING_TEXT};
+use crate::so::rules::{metrics as rules_metrics, PassThrough, PlanRunner, Route, SlowRouter, TranscriptRouter, THINKING_TEXT};
 use crate::so::panel::{self, Kind, Line, PanelAction, PanelOut, PanelPayload, TaggedPanel};
 use crate::so::settings::HotkeyChoice;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -143,6 +143,8 @@ struct Delivery {
     router: Arc<dyn TranscriptRouter>,
     /// The AI for talks the router passes through (step 4); `None` = steps 2 and 3 exactly.
     brain: Option<Arc<dyn SlowRouter>>,
+    /// Step 6: runs a plan's steps. `None` = the step-4 "Plan, not run" lines.
+    runner: Option<Arc<dyn PlanRunner>>,
     panel: Arc<TaggedPanel>,
 }
 
@@ -178,10 +180,23 @@ impl Delivery {
     /// The brain's part of `deliver`.
     fn think(&self, brain: &dyn SlowRouter, talk: u64, text: &str, stopped_at: Instant, heard: Line) {
         self.panel.show(talk, PanelPayload::new(vec![heard.clone(), Line::new(THINKING_TEXT, Kind::Info)]));
-        let reply = brain.think(text, stopped_at);
+        let (reply, steps) = match self.runner {
+            Some(_) => brain.think_plan(text, stopped_at),
+            None => (brain.think(text, stopped_at), Vec::new()),
+        };
         if self.talk.load(Ordering::SeqCst) > talk {
             let ms = self.clock.now().saturating_duration_since(stopped_at).as_millis() as u64;
             brain_metrics::brain(12, 0, ms, 0, 0, 0, &[]);
+            return;
+        }
+        if let (Some(runner), false) = (self.runner.as_ref(), steps.is_empty()) {
+            // The task runs on this talk thread; its lines go under "Heard", tagged with this talk.
+            let hold = runner.run_plan(&steps, &|lines: Vec<Line>| {
+                let mut all = vec![heard.clone()];
+                all.extend(lines);
+                self.panel.show(talk, PanelPayload::new(all));
+            });
+            schedule_hide_after(&self.panel, talk, hold);
             return;
         }
         let mut lines = vec![heard];
@@ -219,7 +234,7 @@ impl SpeechSink {
         hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
         router: Arc<dyn TranscriptRouter>,
     ) -> Self {
-        Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, None)
+        Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, None, None)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -233,6 +248,7 @@ impl SpeechSink {
         hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
         router: Arc<dyn TranscriptRouter>,
         brain: Option<Arc<dyn SlowRouter>>,
+        runner: Option<Arc<dyn PlanRunner>>,
     ) -> Self {
         let (tx, rx) = channel();
         let talk = Arc::new(AtomicU64::new(0));
@@ -242,6 +258,7 @@ impl SpeechSink {
             clock: clock.clone(),
             router,
             brain,
+            runner,
             panel: panel.clone(),
         });
         let worker = Worker {
@@ -287,12 +304,12 @@ impl SpeechSink {
         router: Arc<dyn TranscriptRouter>,
         brain: Arc<dyn SlowRouter>,
     ) -> Self {
-        Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, Some(brain))
+        Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, Some(brain), None)
     }
 
-    /// Like `with_brain`, plus a plan runner (step 6 stub: runner not used yet).
+    /// Like `with_brain`, plus a plan runner: a brain plan with steps goes to `runner.run_plan`.
     #[allow(clippy::too_many_arguments)]
-    #[allow(dead_code)] // stub: remove when wired (step 6)
+    #[allow(dead_code)] // wired in step 6 inc 4 (so/mod.rs)
     pub fn with_runner(
         recorder: Arc<dyn Recorder>,
         transcriber: Arc<dyn Transcriber>,
@@ -303,9 +320,9 @@ impl SpeechSink {
         hotkey: Box<dyn Fn() -> HotkeyChoice + Send + Sync>,
         router: Arc<dyn TranscriptRouter>,
         brain: Arc<dyn SlowRouter>,
-        _runner: Arc<dyn crate::so::rules::PlanRunner>,
+        runner: Arc<dyn PlanRunner>,
     ) -> Self {
-        Self::with_brain(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, brain)
+        Self::build(recorder, transcriber, panel, clock, tap, stopper, hotkey, router, Some(brain), Some(runner))
     }
 
     /// Debug builds only: a typed phrase enters as a new talk (talk id +1, `stopped_at` = now), then
