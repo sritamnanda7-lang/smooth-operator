@@ -5,6 +5,7 @@
 use super::link_support::*;
 use super::rules_support::{captured, in_child, install_capture, run_isolated};
 use crate::so::link::commands::LinkState;
+use crate::so::brain::keys::KeyError;
 use crate::so::link::protocol::*;
 use crate::so::link::server::{CmdReply, Link, LinkError};
 use std::collections::HashSet;
@@ -495,4 +496,129 @@ fn n14_inner() {
     let after: Vec<String> = captured().into_iter().skip(baseline).filter(|r| r.contains("::so::")).collect();
     assert_eq!(leaked(&after, &secrets), Vec::<String>::new(), "a URL or query reached our log (text or ASCII hex)");
     assert!(!link_records(&after).is_empty(), "positive control: link records exist");
+}
+
+// ---------- Link::state(): never blocks, never a false KeychainError (step 6 inc 4 carry-over) ----------
+fn state_on_thread(link: &Arc<Link>) -> Option<LinkState> {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let l = link.clone();
+    std::thread::spawn(move || {
+        let _ = tx.send(l.state());
+    });
+    rx.recv_timeout(Duration::from_millis(150)).ok()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn state_does_not_block_on_a_slow_keychain_and_says_connecting_not_keychain_error() {
+    let rig = start(Some(TOK)).await;
+    rig.store.block_gets();
+    let s = state_on_thread(&rig.link);
+    let gets = rig.store.gets();
+    rig.store.release();
+    assert_eq!(gets, 0, "state() must never call tokens.get()");
+    assert_eq!(s, Some(LinkState::NotFound), "no answer within 150 ms means it blocked; the unknown-token value is NotFound (connecting)");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn state_is_not_keychain_error_while_an_auth_read_is_in_flight() {
+    let rig = start(Some(TOK)).await;
+    rig.store.block_gets();
+    let mut ws = expect_next_101(rig.port).await;
+    let nonce = hello(&mut ws).await;
+    send(&mut ws, &auth_text(&ext_proof(TOK, &nonce), &cnonce(1))).await;
+    let t = Instant::now();
+    while rig.store.gets() == 0 {
+        assert!(t.elapsed() < Duration::from_secs(2), "the auth read never started");
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    let s = state_on_thread(&rig.link);
+    rig.store.release();
+    assert!(matches!(s, Some(x) if x != LinkState::KeychainError), "a read in flight is not a Keychain error: {s:?}");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_genuine_keychain_error_after_a_failed_read_is_still_keychain_error() {
+    let store = TestStore::new(Some(TOK));
+    store.fail_get(Some(KeyError::Denied));
+    let rig = start_with(test_cfg(500, 5000), store).await;
+    let mut ws = expect_next_101(rig.port).await;
+    let nonce = hello(&mut ws).await;
+    send(&mut ws, &auth_text(&ext_proof(TOK, &nonce), &cnonce(1))).await;
+    assert_eq!(expect_close_json_then(&mut ws).await, 4401);
+    let t = Instant::now();
+    loop {
+        if state_on_thread(&rig.link) == Some(LinkState::KeychainError) {
+            break;
+        }
+        assert!(t.elapsed() < Duration::from_secs(2), "KeychainError never reported after a failed read");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+async fn expect_close_json_then(ws: &mut Ws) -> u16 {
+    let _ = recv_json(ws).await;
+    expect_close(ws).await
+}
+
+// ---------- outcome 31: once per pending id; an abandoned request's late result is 31, never 32 ----------
+#[test]
+fn n4_unexpected_results_log_outcome_31_once_per_pending_id() {
+    run_isolated(module_path!(), "n4_once_inner");
+}
+#[test]
+#[ignore]
+fn n4_once_inner() {
+    if !in_child() {
+        return;
+    }
+    install_capture();
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(3).enable_all().build().unwrap();
+    rt.block_on(async {
+        let rig = start(Some(TOK)).await;
+        let mut ws = connect(&rig, 1).await;
+        let h = spawn_plain(&rig.link, yt(), Duration::from_secs(5));
+        let (id, _) = recv_cmd(&mut ws).await;
+        let from = link_records(&captured()).len();
+        for i in 0..10u64 {
+            send(&mut ws, &res_text(id + 1 + i, "playing", 5)).await;
+        }
+        send(&mut ws, &ping_text()).await; // processed in order: when the pong is back, all 10 were handled
+        assert_eq!(recv_json(&mut ws).await["t"], "pong");
+        let n31 = link_records(&captured()).iter().skip(from).filter(|r| r.0 == 31).count();
+        assert_eq!(n31, 1, "ten unexpected results for one pending id log one outcome 31");
+        send(&mut ws, &res_text(id, "playing", 5)).await;
+        assert!(join(h).await.is_ok());
+    });
+}
+
+#[test]
+fn n5_a_result_for_an_abandoned_request_logs_31_never_32() {
+    run_isolated(module_path!(), "n5_abandoned_inner");
+}
+#[test]
+#[ignore]
+fn n5_abandoned_inner() {
+    if !in_child() {
+        return;
+    }
+    install_capture();
+    let rt = tokio::runtime::Builder::new_multi_thread().worker_threads(3).enable_all().build().unwrap();
+    rt.block_on(async {
+        let rig = start(Some(TOK)).await;
+        let mut ws = connect(&rig, 1).await;
+        let h = spawn_plain(&rig.link, yt(), Duration::from_millis(200));
+        let (id, _) = recv_cmd(&mut ws).await;
+        assert_eq!(join(h).await, Err(LinkError::Timeout));
+        let from = link_records(&captured()).len();
+        send(&mut ws, &res_text(id, "playing", 5)).await;
+        send(&mut ws, &ping_text()).await;
+        let _ = recv_json(&mut ws).await; // cancel
+        let mut pong = recv_json(&mut ws).await;
+        if pong["t"] != "pong" {
+            pong = recv_json(&mut ws).await;
+        }
+        assert_eq!(pong["t"], "pong");
+        let recs: Vec<u8> = link_records(&captured()).iter().skip(from).map(|r| r.0).collect();
+        assert!(recs.contains(&31), "{recs:?}");
+        assert!(!recs.contains(&32), "an abandoned request's result must not count as accepted: {recs:?}");
+    });
 }

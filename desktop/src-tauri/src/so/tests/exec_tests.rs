@@ -751,6 +751,45 @@ fn x21_a_web_step_starting_late_gets_a_request_wait_capped_to_the_time_left() {
     assert!(r.browser.reqs()[1].1 <= Duration::from_secs(5), "{:?}", r.browser.reqs()[1].1);
 }
 
+#[test]
+fn x21_a_docs_step_whose_wait_hits_the_deadline_ends_deadline_not_failed_and_is_not_retried() {
+    for first in [ok(Timeout), err(LinkError::Timeout)] {
+        let r = Rig::new();
+        let c = r.clock.clone();
+        r.browser.set_hook(move |_, _| c.set(95_000));
+        r.browser.script(vec![first, ok(EditorOpen)]);
+        let (_, shown) = r.plan(&[docs("t"), media(MediaArg::Next)]);
+        assert_eq!(last_body(&shown), vec![line(1, DEADLINE_TEXT), "Not run: 1 more step".to_string()], "{first:?}");
+        assert_eq!(r.browser.reqs().len(), 1);
+        let r2 = Rig::new();
+        let c = r2.clock.clone();
+        r2.browser.set_hook(move |_, _| c.set(95_000));
+        r2.browser.script(vec![first]);
+        assert_eq!(r2.run(&[docs("t")]).steps[0].res, Res::Deadline);
+    }
+}
+
+#[test]
+fn x21_the_deadline_is_logged_with_the_deadline_res_code() {
+    run_isolated(module_path!(), "x21_log_inner");
+}
+#[test]
+#[ignore]
+fn x21_log_inner() {
+    if !in_child() {
+        return;
+    }
+    install_capture();
+    let r = Rig::new();
+    let c = r.clock.clone();
+    r.browser.set_hook(move |_, _| c.set(95_000));
+    r.browser.script(vec![ok(Timeout)]);
+    r.run(&[docs("t")]);
+    let want = Res::Deadline.code() as u64;
+    let found = captured().iter().filter(|x| x.contains("::so::exec")).filter_map(|x| parse_exec(x.split_once(' ').map(|y| y.1).unwrap_or(x))).any(|f| f[2] == want);
+    assert!(found, "no exec record with res={want}: {:?}", captured());
+}
+
 // ---------- X22 ----------
 #[test]
 fn x22_no_access_needs_login_and_consent_have_their_texts_and_are_not_retried() {
