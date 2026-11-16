@@ -556,3 +556,122 @@ describe("E9 untrusted server messages", () => {
     expect(s.closed).toBe(false);
   });
 });
+
+// ---------------- step 6: E10 (commands on the link) and E14 (socket end cancels the job) ----------------
+describe("E10 link.js commands", () => {
+  const YT = "https://www.youtube.com/results?search_query=Blinding+Lights";
+  const cmd = (o: Record<string, unknown>) => JSON.stringify({ t: "cmd", v: 1, ...o });
+  function fakeTasks(result = { r: "playing", ms: 1234 }) {
+    return { run: vi.fn(async () => result), cancel: vi.fn(), cancelAll: vi.fn() };
+  }
+  async function bootT(tasks: ReturnType<typeof fakeTasks>) {
+    const r = makeEnv({ token: TOKEN });
+    const h = startLink({ ...r.env, tasks } as never);
+    stops.push(() => h.stop());
+    await settle();
+    return r;
+  }
+
+  it("a cmd in CONNECTED runs once and the res goes back on the same socket with exactly t,v,id,r,ms", async () => {
+    const tasks = fakeTasks();
+    const r = await bootT(tasks);
+    const s = r.sockets[0];
+    await authenticate(s);
+    s.serverSend(cmd({ id: 7, op: "yt_play", url: YT }));
+    await until(() => s.sentOf("res").length === 1, "the res");
+    expect(tasks.run).toHaveBeenCalledTimes(1);
+    expect((tasks.run.mock.calls[0] as any)[0]).toMatchObject({ id: 7, op: "yt_play", url: YT });
+    expect(s.sentOf("res")[0]).toEqual({ t: "res", v: 1, id: 7, r: "playing", ms: 1234 });
+    expect(Object.keys(s.sentOf("res")[0]).sort()).toEqual(["id", "ms", "r", "t", "v"]);
+  });
+
+  it("a cmd before auth is REJECTED: the socket closes and nothing runs", async () => {
+    const tasks = fakeTasks();
+    const r = await bootT(tasks);
+    const s = r.sockets[0];
+    await openAndHello(s, hex64(0x11));
+    await until(() => s.sentOf("auth").length === 1, "auth");
+    s.serverSend(cmd({ id: 7, op: "docs_open" }));
+    await settle();
+    expect(tasks.run).not.toHaveBeenCalled();
+    expect(s.closed).toBe(true);
+    expect(s.sentOf("res")).toEqual([]);
+    expect(stateOf(r)).not.toBe(S.CONNECTED);
+  });
+
+  it("a cancel before auth is REJECTED too; in CONNECTED it calls tasks.cancel(id)", async () => {
+    const tasks = fakeTasks();
+    const r = await bootT(tasks);
+    const s = r.sockets[0];
+    await openAndHello(s, hex64(0x11));
+    s.serverSend(JSON.stringify({ t: "cancel", v: 1, id: 3 }));
+    await settle();
+    expect(tasks.cancel).not.toHaveBeenCalled();
+    expect(s.closed).toBe(true);
+    const tasks2 = fakeTasks();
+    const r2 = await bootT(tasks2);
+    await authenticate(r2.sockets[0]);
+    r2.sockets[0].serverSend(JSON.stringify({ t: "cancel", v: 1, id: 3 }));
+    await settle();
+    expect(tasks2.cancel).toHaveBeenCalledWith(3);
+  });
+
+  it("a bad cmd with a valid id answers bad_cmd (nothing runs); without an id it is ignored and the link stays up", async () => {
+    const tasks = fakeTasks();
+    const r = await bootT(tasks);
+    const s = r.sockets[0];
+    await authenticate(s);
+    s.serverSend(cmd({ id: 9, op: "yt_play", url: "https://evil.example/results?search_query=a" }));
+    await until(() => s.sentOf("res").length === 1, "bad_cmd");
+    expect(s.sentOf("res")[0]).toMatchObject({ t: "res", v: 1, id: 9, r: "bad_cmd" });
+    s.serverSend(cmd({ id: 0, op: "docs_open" }));
+    s.serverSend(cmd({ op: "docs_open" }));
+    await settle();
+    expect(s.sentOf("res").length).toBe(1);
+    expect(tasks.run).not.toHaveBeenCalled();
+    expect(s.closed).toBe(false);
+    expect(stateOf(r)).toBe(S.CONNECTED);
+  });
+
+  it("a cmd on a socket that is no longer the current one is not run", async () => {
+    const tasks = fakeTasks();
+    const r = await bootT(tasks);
+    const old = r.sockets[0];
+    await authenticate(old);
+    old.serverClose(1006);
+    await settle();
+    old.readyState = 1;
+    (old as any).serverSend(cmd({ id: 7, op: "docs_open" }));
+    await settle();
+    expect(tasks.run).not.toHaveBeenCalled();
+  });
+});
+
+describe("E14 a socket that ends during a job cancels it", () => {
+  it("cancelAll runs, and the late result is not sent on the same or any later socket", async () => {
+    let finish!: (v: { r: string; ms: number }) => void;
+    const tasks = {
+      run: vi.fn(() => new Promise<{ r: string; ms: number }>((res) => (finish = res))),
+      cancel: vi.fn(),
+      cancelAll: vi.fn(),
+    };
+    const r = makeEnv({ token: TOKEN });
+    const h = startLink({ ...r.env, tasks } as never);
+    stops.push(() => h.stop());
+    await settle();
+    const s = r.sockets[0];
+    await authenticate(s);
+    s.serverSend(JSON.stringify({ t: "cmd", v: 1, id: 7, op: "docs_open" }));
+    await until(() => tasks.run.mock.calls.length === 1, "the job starts");
+    s.serverClose(1006);
+    await settle();
+    expect(tasks.cancelAll).toHaveBeenCalled();
+    await r.timers.advance(60_000);
+    const next = r.sockets.at(-1)!;
+    expect(next).not.toBe(s);
+    await authenticate(next, TOKEN, hex64(0x33));
+    finish({ r: "editor_open", ms: 5 });
+    await settle();
+    for (const sock of r.sockets) expect(sock.sentOf("res"), "no res after the socket ended").toEqual([]);
+  });
+});

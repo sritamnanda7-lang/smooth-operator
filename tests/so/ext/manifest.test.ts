@@ -19,3 +19,21 @@ describe("E10 manifest key -> extension ID", () => {
     expect(rust).toContain(`pub const ALLOWED_ORIGIN: &str = "chrome-extension://${id}";`);
   });
 });
+
+// ---------------- step 6 E13: the manifest is exactly the approved permission set ----------------
+describe("E13 manifest permissions (step 6)", () => {
+  const m = JSON.parse(readFileSync(join(ROOT, "chrome-extension/manifest.json"), "utf8"));
+  it("storage, alarms, scripting and exactly three hosts", () => {
+    expect(m.permissions).toEqual(["storage", "alarms", "scripting"]);
+    expect([...m.host_permissions].sort()).toEqual(["https://calendar.google.com/*", "https://docs.google.com/*", "https://www.youtube.com/*"]);
+  });
+  it("no content scripts, tabs, activeTab, all-urls, web-accessible resources or externally_connectable", () => {
+    for (const k of ["content_scripts", "web_accessible_resources", "externally_connectable"]) expect(m[k]).toBeUndefined();
+    const all = JSON.stringify(m);
+    for (const bad of ['"tabs"', "activeTab", "<all_urls>"]) expect(all).not.toContain(bad);
+  });
+  it("minimum_chrome_version is a number >= 116 (the founder sets the final value after Z5)", () => {
+    const n = Number(m.minimum_chrome_version);
+    expect(Number.isInteger(n) && n >= 116).toBe(true);
+  });
+});

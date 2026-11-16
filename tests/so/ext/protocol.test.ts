@@ -87,3 +87,67 @@ describe("isCode: exactly 6 ASCII digits", () => {
     for (const bad of [123456, null, undefined, {}, ["123456"]]) expect(isCode(bad as never), String(bad)).toBe(false);
   });
 });
+
+// ---------------- step 6: E2 resMsg + R, and the cmd / cancel messages ----------------
+import { R, resMsg } from "../../../chrome-extension/lib/protocol.js";
+
+const CODES = ["playing", "ad", "paused", "no_video", "editor_open", "needs_login", "consent", "no_access", "timeout", "bad_cmd", "busy", "unsafe", "cancelled", "error"];
+
+describe("E2 (step 6) R and resMsg", () => {
+  it("R is a frozen enum of exactly the 14 result codes", () => {
+    expect(Object.isFrozen(R)).toBe(true);
+    expect([...Object.values(R)].sort()).toEqual([...CODES].sort());
+  });
+  it("resMsg has exactly the keys t, v, id, r, ms", () => {
+    const m = JSON.parse(resMsg(7, "playing", 1234));
+    expect(Object.keys(m).sort()).toEqual(["id", "ms", "r", "t", "v"]);
+    expect(m).toEqual({ t: "res", v: 1, id: 7, r: "playing", ms: 1234 });
+    for (const c of CODES) expect(JSON.parse(resMsg(1, c as never, 5)).r).toBe(c);
+  });
+  it("ms is an integer clamped to 0..120000", () => {
+    const ms = (x: number) => JSON.parse(resMsg(1, "playing", x)).ms;
+    expect(ms(-5)).toBe(0);
+    expect(ms(999_999)).toBe(120_000);
+    expect(ms(120_000)).toBe(120_000);
+    expect(ms(0)).toBe(0);
+    expect(Number.isInteger(ms(12.7)) && ms(12.7) >= 12 && ms(12.7) <= 13).toBe(true);
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      const v = ms(bad);
+      expect(Number.isInteger(v) && v >= 0 && v <= 120_000, String(bad)).toBe(true);
+    }
+  });
+  it("r only comes from R: an unknown code throws or becomes error, never goes out as is", () => {
+    expect(typeof resMsg).toBe("function");
+    expect(JSON.parse(resMsg(1, "playing", 5)).r, "positive control").toBe("playing");
+    let out: string | undefined;
+    try {
+      out = resMsg(1, "nope" as never, 5);
+    } catch {
+      return;
+    }
+    expect(JSON.parse(out).r).toBe("error");
+  });
+  it("never any page text: a title-like extra argument does not appear", () => {
+    expect(resMsg(1, "playing", 5, "Secret Title" as never)).not.toContain("Secret");
+  });
+});
+
+describe("parseApp (step 6): cmd and cancel", () => {
+  const YT = "https://www.youtube.com/results?search_query=Blinding+Lights";
+  it("accepts a valid cmd and cancel", () => {
+    for (const o of [{ t: "cmd", v: 1, id: 7, op: "yt_play", url: YT }, { t: "cmd", v: 1, id: 8, op: "docs_open" }]) {
+      const r = parseApp(JSON.stringify(o)) as any;
+      expect(r.ok, JSON.stringify(o)).toBe(true);
+      expect(r.msg.t).toBe("cmd");
+      expect(r.msg.id).toBe(o.id);
+    }
+    const c = parseApp(JSON.stringify({ t: "cancel", v: 1, id: 7 })) as any;
+    expect(c.ok).toBe(true);
+    expect(c.msg).toMatchObject({ t: "cancel", id: 7 });
+  });
+  it("rejects a cancel with an extra key or a bad id", () => {
+    for (const o of [{ t: "cancel", v: 1, id: 7, x: 1 }, { t: "cancel", v: 1, id: 0 }, { t: "cancel", v: 1, id: "7" }, { t: "cancel", v: 1 }, { t: "cancel", v: 2, id: 7 }, { t: "cancel", v: 1, id: 2147483648 }]) {
+      expect(parseApp(JSON.stringify(o)).ok, JSON.stringify(o)).toBe(false);
+    }
+  });
+});

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
+//! Step 6 (A/R/X/N/P, exec) tests are the `exec_*` and `link_cmd_tests` modules below.
 //! Step 1 (T1-T32), step 2 (T1-T28, speech-to-text) and step 3 (R/P/A/F/I, fast rules) Rust tests. Fakes only; no OS calls. Time is injected.
 mod fncheck_tests;
 mod hotkey_tests;
@@ -41,3 +42,9 @@ mod link_session_tests;
 mod link_ipc_tests;
 #[cfg(target_os = "macos")]
 mod link_keychain_real;
+mod exec_support;
+mod exec_ops_tests;
+mod exec_risk_tests;
+mod exec_tests;
+mod exec_seam_tests;
+mod link_cmd_tests;

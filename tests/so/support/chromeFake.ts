@@ -104,7 +104,8 @@ export class FakeWebSocket {
   }
 }
 
-export function makeEnv(opts: { token?: string; id?: string } = {}) {
+export function makeEnv(opts: { token?: string; id?: string; access?: "ok" | "reject" | "throw" | "missing" } = {}) {
+  const accessCalls: unknown[] = [];
   const id = opts.id ?? "extid_abcdefghijklmnop";
   const store: Record<string, unknown> = {};
   if (opts.token) store.token = opts.token;
@@ -144,6 +145,16 @@ export function makeEnv(opts: { token?: string; id?: string } = {}) {
     storage: {
       onChanged: { addListener: (f: (typeof onChanged)[number]) => void onChanged.push(f) },
       local: {
+        ...(opts.access === "missing"
+          ? {}
+          : {
+              // step 6: only the extension's own pages may read storage.local (call shape: one options object).
+              setAccessLevel: (o: unknown) => {
+                accessCalls.push(o);
+                if (opts.access === "throw") throw new Error("setAccessLevel threw synchronously");
+                return opts.access === "reject" ? Promise.reject(new Error("setAccessLevel rejected")) : Promise.resolve();
+              },
+            }),
         get: async (keys?: unknown) => pick(keys),
         set: async (obj: Record<string, unknown>) => {
           for (let i = 0; i < setDelay; i++) await tick();
@@ -226,7 +237,7 @@ export function makeEnv(opts: { token?: string; id?: string } = {}) {
     /** A message from the extension's own popup. */
     popup: (msg: unknown) => onMessage.map((f) => f(msg, { id, url: `chrome-extension://${id}/popup.html` }, () => {})),
   };
-  return { env, id, setSetDelay: (n: number) => void (setDelay = n), store, writes, removes, clears: () => clears, alarmsCreated, alarmsCleared, sockets, timers, emit };
+  return { env, id, accessCalls, setSetDelay: (n: number) => void (setDelay = n), store, writes, removes, clears: () => clears, alarmsCreated, alarmsCleared, sockets, timers, emit };
 }
 export type Rig = ReturnType<typeof makeEnv>;
 
@@ -240,3 +251,112 @@ export async function openAndHello(s: FakeWebSocket, nonce: string) {
   s.serverSend(JSON.stringify({ t: "status", v: 1, state: "hello", nonce }));
   await settle();
 }
+
+// ======================= step 6: time, tabs, windows, scripting, permissions =======================
+/** A clock the test advances by hand; `sleep` resolves when advanced past it. */
+export function makeTime() {
+  let t = 0;
+  const sleepers: { at: number; res: () => void }[] = [];
+  return {
+    now: () => t,
+    sleep: (ms: number) => new Promise<void>((res) => void sleepers.push({ at: t + ms, res })),
+    async advance(ms: number) {
+      const end = t + ms;
+      for (;;) {
+        const due = sleepers.filter((s) => s.at <= end).sort((a, b) => a.at - b.at)[0];
+        if (!due) break;
+        sleepers.splice(sleepers.indexOf(due), 1);
+        t = due.at;
+        due.res();
+        await settle(6);
+      }
+      t = end;
+      await settle(6);
+    },
+  };
+}
+export type Time = ReturnType<typeof makeTime>;
+
+export type Tab = { id: number; windowId: number; url?: string; status: "loading" | "complete"; lastAccessed?: number };
+export type Call = { api: string; args: unknown; at: number };
+export type Nav = { delay: number; url: string | undefined };
+
+/**
+ * A scriptable `chrome` for the page jobs. Every call is logged in `calls` (api name, args, fake time).
+ * `nav(url)` says what a navigation ends as (default: the same URL after 300 ms). `script[fn]` answers
+ * `executeScript` by the injected function's name ("ytScan", "ytPlayer", ...). Anything not listed here is
+ * undefined (so a call to it throws): no `tabs.remove`, no `tabs.executeScript`, no `windows.create` unless listed.
+ */
+export function makeBrowser(time: Time, o: { granted?: boolean; tabs?: Tab[] } = {}) {
+  const calls: Call[] = [];
+  const log = (api: string, args: unknown) => void calls.push({ api, args: JSON.parse(JSON.stringify(args ?? null)), at: time.now() });
+  const tabs = new Map<number, Tab>((o.tabs ?? []).map((t) => [t.id, { ...t }]));
+  let nextId = 100;
+  const sim = {
+    calls,
+    tabs,
+    granted: o.granted ?? true,
+    getFails: false,
+    nav: (url: string): Nav => ({ delay: 300, url }),
+    script: {} as Record<string, (c: { tab: Tab; args: unknown[]; now: number }) => unknown>,
+    hang: new Set<string>(), // injected function names whose executeScript never settles
+    navDone: [] as { tabId: number; url: string | undefined; at: number }[],
+    count: (api: string) => calls.filter((c) => c.api === api).length,
+    of: (api: string) => calls.filter((c) => c.api === api).map((c) => c.args as Record<string, any>),
+    scripts: (fn: string) => calls.filter((c) => c.api === "scripting.executeScript" && (c.args as any).fn === fn),
+  };
+  const navigate = (tab: Tab, url: string) => {
+    const n = sim.nav(url);
+    tab.status = "loading";
+    void time.sleep(n.delay).then(() => {
+      tab.url = n.url;
+      tab.status = "complete";
+      sim.navDone.push({ tabId: tab.id, url: n.url, at: time.now() });
+    });
+  };
+  const chrome = {
+    permissions: { contains: async (q: unknown) => (log("permissions.contains", q), sim.granted) },
+    tabs: {
+      query: async (q: { url?: string }) => {
+        log("tabs.query", q);
+        const prefix = (q.url ?? "").replace(/\*$/, "");
+        return [...tabs.values()].filter((t) => t.url !== undefined && t.url.startsWith(prefix)).map((t) => ({ ...t }));
+      },
+      create: async (p: { url: string; active?: boolean }) => {
+        log("tabs.create", p);
+        const tab: Tab = { id: nextId++, windowId: 1, url: "", status: "loading" };
+        tabs.set(tab.id, tab);
+        navigate(tab, p.url);
+        return { ...tab };
+      },
+      update: async (id: number, p: { url?: string; active?: boolean }) => {
+        log("tabs.update", { id, ...p });
+        const tab = tabs.get(id);
+        if (!tab) throw new Error("No tab with id");
+        if (p.url) navigate(tab, p.url);
+        return { ...tab };
+      },
+      get: async (id: number) => {
+        log("tabs.get", { id });
+        const tab = tabs.get(id);
+        if (!tab || sim.getFails) throw new Error("No tab with id: " + id);
+        return { ...tab };
+      },
+    },
+    windows: {
+      update: async (id: number, p: unknown) => (log("windows.update", { id, p }), {}),
+    },
+    scripting: {
+      executeScript: async (inj: { target: { tabId: number }; func: (...a: any[]) => unknown; args?: unknown[] }) => {
+        const tab = tabs.get(inj.target.tabId);
+        log("scripting.executeScript", { tabId: inj.target.tabId, fn: inj.func.name, args: inj.args ?? [], keys: Object.keys(inj).sort() });
+        if (!tab) throw new Error("No tab with id");
+        if (sim.hang.has(inj.func.name)) return new Promise<never>(() => {});
+        const impl = sim.script[inj.func.name];
+        return [{ result: impl ? impl({ tab, args: inj.args ?? [], now: time.now() }) : undefined }];
+      },
+    },
+  };
+  return { chrome, sim };
+}
+export type Browser = ReturnType<typeof makeBrowser>;
