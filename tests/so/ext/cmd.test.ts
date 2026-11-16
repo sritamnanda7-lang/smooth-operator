@@ -78,7 +78,7 @@ describe("N1 only canonical URLs (new URL(s).href === s)", () => {
   it("the app's own URL shapes still pass", () => {
     for (const u of [YT, yt("Beyoncé — Halo"), yt("𝄞".repeat(5)), yt("a&b=c#d"), cal(), cal("He said \"hi\" \\ back"), cal("𝄞".repeat(100)), cal().replace("/2026", "%2F2026"), new URL(`https://www.youtube.com/results?${new URLSearchParams({ search_query: "Beyoncé — Halo ~!*" })}`).href]) {
       expect(new URL(u).href, u).toBe(u);
-      expect(u.startsWith("https://www.youtube.com") ? checkYtUrl(u) : checkCalUrl(u, NOW), u).toBe(true);
+      expect(new URL(u).hostname === "www.youtube.com" ? checkYtUrl(u) : checkCalUrl(u, NOW), u).toBe(true);
     }
   });
   it("non-canonical spellings are rejected", () => {

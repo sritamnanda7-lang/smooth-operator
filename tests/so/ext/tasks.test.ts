@@ -44,6 +44,11 @@ function healthy(r: ReturnType<typeof rig>) {
   r.sim.script.ytPlayer = ({ tab, now }) => (tab.url === WATCH ? { s: "playing", t: now / 1000 } : { s: "none", t: 0 });
 }
 const apis = (r: ReturnType<typeof rig>) => r.sim.calls.map((c) => c.api);
+/** Hostnames named by a permissions.contains / tabs.query call (parsed, not substring-matched). */
+const hostsOf = (arg: unknown): string[] => {
+  const a = arg as { origins?: string[]; url?: string };
+  return [...(a.origins ?? []), ...(a.url ? [a.url] : [])].map((p) => new URL(p.replace("*", "")).hostname);
+};
 const guarded = ["tabs.create", "tabs.update", "tabs.query", "tabs.get", "windows.update", "scripting.executeScript"];
 
 describe("E6 yt_play happy path", () => {
@@ -79,7 +84,7 @@ describe("E6 yt_play happy path", () => {
     healthy(r);
     await r.run(ytCmd());
     expect(apis(r)[0]).toBe("permissions.contains");
-    expect(JSON.stringify(r.sim.of("permissions.contains")[0])).toContain("youtube.com");
+    expect(hostsOf(r.sim.of("permissions.contains")[0])).toContain("www.youtube.com");
   });
   it("reuses the YouTube tab used last: tabs.update with the sent URL, no tabs.create", async () => {
     const r = rig({
@@ -93,7 +98,7 @@ describe("E6 yt_play happy path", () => {
     expect(out.r).toBe("playing");
     expect(r.sim.count("tabs.create")).toBe(0);
     expect(r.sim.count("tabs.query")).toBeGreaterThanOrEqual(1);
-    expect(JSON.stringify(r.sim.of("tabs.query")[0])).toContain("youtube.com");
+    expect(hostsOf(r.sim.of("tabs.query")[0])).toContain("www.youtube.com");
     const first = r.sim.of("tabs.update")[0];
     expect(first).toMatchObject({ id: 6, url: YT });
   });
@@ -344,7 +349,7 @@ describe("E7 docs_open", () => {
     expect(r.sim.of("tabs.create")).toEqual([{ url: "https://docs.new/", active: true }]);
     expect(r.sim.count("scripting.executeScript")).toBe(0);
     expect(r.sim.count("windows.update")).toBeGreaterThanOrEqual(1);
-    expect(JSON.stringify(r.sim.of("permissions.contains")[0])).toContain("docs.google.com");
+    expect(hostsOf(r.sim.of("permissions.contains")[0])).toContain("docs.google.com");
     for (const u of ["https://docs.google.com/document/u/0/d/abc/edit", "https://docs.google.com/document/d/abc/edit?usp=x"]) {
       const r2 = rig();
       r2.sim.nav = () => ({ delay: 500, url: u });
@@ -379,7 +384,7 @@ describe("E8 cal_open", () => {
     expect(out.r).toBe("editor_open");
     expect(r.sim.of("tabs.create")).toEqual([{ url: CAL, active: true }]);
     expect(r.sim.count("scripting.executeScript")).toBe(0);
-    expect(JSON.stringify(r.sim.of("permissions.contains")[0])).toContain("calendar.google.com");
+    expect(hostsOf(r.sim.of("permissions.contains")[0])).toContain("calendar.google.com");
   });
   it("needs_login and timeout", async () => {
     const r = rig();
