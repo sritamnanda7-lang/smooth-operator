@@ -309,7 +309,6 @@ impl SpeechSink {
 
     /// Like `with_brain`, plus a plan runner: a brain plan with steps goes to `runner.run_plan`.
     #[allow(clippy::too_many_arguments)]
-    #[allow(dead_code)] // wired in step 6 inc 4 (so/mod.rs)
     pub fn with_runner(
         recorder: Arc<dyn Recorder>,
         transcriber: Arc<dyn Transcriber>,

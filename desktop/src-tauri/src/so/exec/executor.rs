@@ -409,6 +409,7 @@ impl PlanRunner for Executor {
             show(lines);
         };
         let (report, texts) = self.go(steps, &ui);
+        let _ = report.retries; // already logged per op; kept on the report for `run` callers
         if report.busy {
             show(vec![Line::new(BUSY_TEXT, Kind::Warn)]);
             return RESULT_SECS;
@@ -438,3 +439,10 @@ impl PlanRunner for Executor {
         RESULT_SECS
     }
 }
+
+// `run` and `busy` are the plain-call API (tests, step 7); the app goes through `run_plan`. Same
+// reference trick as so/mod.rs: no dead-code warning, no allow.
+const _: () = {
+    let _ = Executor::run;
+    let _ = Executor::busy;
+};

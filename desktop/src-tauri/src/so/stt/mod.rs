@@ -108,20 +108,35 @@ pub fn setup(app: &AppHandle) {
     let brain = app_brain(app);
     #[cfg(debug_assertions)]
     let brain = fake_brain().unwrap_or(brain);
-    let sink = Arc::new(sink::SpeechSink::with_brain(
-        Arc::new(real::RealRecorder::new(rec.inner().clone())),
-        Arc::new(real::RealTranscriber::new(tr.inner().clone(), models.inner().clone())),
-        crate::so::panel::panel_out(app),
-        Arc::new(crate::so::hotkey::SystemClock),
-        Arc::new(tap::StaticTap),
-        Arc::new(real::WatcherStopper),
-        Box::new(move || so_settings::load_hotkey(&app_for_hotkey, Platform::current())),
-        fast_router(app),
-        brain,
-    ));
+    let recorder = Arc::new(real::RealRecorder::new(rec.inner().clone()));
+    let transcriber = Arc::new(real::RealTranscriber::new(tr.inner().clone(), models.inner().clone()));
+    let panel = crate::so::panel::panel_out(app);
+    let clock = Arc::new(crate::so::hotkey::SystemClock);
+    let hotkey = Box::new(move || so_settings::load_hotkey(&app_for_hotkey, Platform::current()));
+    let router = fast_router(app);
+    // With a runner, a brain plan with steps is executed; without one (no link, not macOS) step 4's lines stay.
+    let sink = Arc::new(match app_runner(app) {
+        Some(runner) => sink::SpeechSink::with_runner(
+            recorder, transcriber, panel, clock, Arc::new(tap::StaticTap), Arc::new(real::WatcherStopper), hotkey, router, brain, runner,
+        ),
+        None => sink::SpeechSink::with_brain(
+            recorder, transcriber, panel, clock, Arc::new(tap::StaticTap), Arc::new(real::WatcherStopper), hotkey, router, brain,
+        ),
+    });
     #[cfg(debug_assertions)]
     start_debug_input(app, &sink);
     let _ = SINK.set(sink);
+}
+
+/// The plan executor (step 6), built once here; its tasks run on the speech delivery thread.
+#[cfg(target_os = "macos")]
+fn app_runner(app: &AppHandle) -> Option<Arc<dyn crate::so::rules::PlanRunner>> {
+    crate::so::exec::real::build(app).map(|e| e as Arc<dyn crate::so::rules::PlanRunner>)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn app_runner(_app: &AppHandle) -> Option<Arc<dyn crate::so::rules::PlanRunner>> {
+    None
 }
 
 /// The AI for talks the fast rules pass through (step 4): Claude and Gemini, the key read from the macOS

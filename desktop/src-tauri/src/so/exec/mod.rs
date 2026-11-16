@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
 //! Step 6: the executor. Runs the safe ops of a plan (open/switch app, media key, YouTube play, open a
-//! blank Doc, prefill a calendar event) and reports fixed texts. Stubs: logic arrives in increments 1-4.
+//! blank Doc, prefill a calendar event) and reports fixed texts.
 //! Plan: draft/step-6-plan.md.
-
-#![allow(dead_code)] // stubs: remove when wired (step 6 inc 4)
 
 pub mod executor;
 pub mod metrics;
@@ -14,7 +12,23 @@ pub mod real;
 use crate::so::brain::plan::OpKind;
 use crate::so::link::protocol::ResultCode;
 use crate::so::link::PORT_BUSY_TEXT;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+
+static RUNNING: OnceLock<Arc<executor::Executor>> = OnceLock::new();
+
+/// Keeps the one executor reachable for `stop_running` (the app has exactly one).
+#[cfg(target_os = "macos")]
+fn register(ex: Arc<executor::Executor>) {
+    let _ = RUNNING.set(ex);
+}
+
+/// Ends the running task, if any: called when the app quits (tray Quit leads here through the exit event).
+pub fn stop_running() {
+    if let Some(ex) = RUNNING.get() {
+        ex.stop();
+    }
+}
 
 /// Every limit in one place so tests can use short ones.
 pub struct ExecConfig {

@@ -414,7 +414,6 @@ pub fn risk_of(a: &Action) -> Risk {
 
 /// One thing the executor does for a step (step 6). A step is a list of these.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)] // remove when wired (step 6 inc 4)
 pub enum OpKind {
     AppOpen,
     AppSwitch,
@@ -429,7 +428,6 @@ pub enum OpKind {
 }
 
 /// The fixed op list per action.
-#[allow(dead_code)] // remove when wired (step 6 inc 4)
 pub fn ops_of(a: &Action) -> &'static [OpKind] {
     use OpKind::*;
     match a {
@@ -445,7 +443,6 @@ pub fn ops_of(a: &Action) -> &'static [OpKind] {
 }
 
 /// Risk of one op: DocsPaste Approve, CalendarSave = `risk_of(a)`, all others Safe.
-#[allow(dead_code)] // remove when wired (step 6 inc 4)
 pub fn op_risk(op: OpKind, a: &Action) -> Risk {
     match op {
         OpKind::DocsPaste => Risk::Approve,

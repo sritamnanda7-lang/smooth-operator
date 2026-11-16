@@ -282,7 +282,6 @@ pub struct CmdReply {
 impl Link {
     /// Blocking: call from a plain thread, never inside the tokio runtime. One command in flight.
     /// Polls every 10 ms so the stop flag ends the wait fast; the socket itself is owned by the session task.
-    #[allow(dead_code)] // wired in step 6 inc 4 (LinkBrowser)
     pub fn request(&self, cmd: &Command, wait: Duration, stop: &AtomicBool) -> Result<CmdReply, LinkError> {
         if self.in_flight.swap(true, Ordering::SeqCst) {
             return Err(LinkError::Busy);
@@ -329,7 +328,6 @@ impl Link {
     /// The link state without a pairing view (for the executor's order: pair text, port text, Keychain text).
     /// Never blocks and never reads the Keychain: an unknown token or a read in flight reads as `NotFound`
     /// (the executor's link wait settles it). `KeychainError` only after a read failed.
-    #[allow(dead_code)] // wired in step 6 inc 4 (LinkBrowser)
     pub fn state(&self) -> LinkState {
         let g = self.lock();
         if g.port_busy {
