@@ -77,6 +77,8 @@ pub struct FakeWall {
     pub offset_secs: i32,
     pub gaps: Vec<NaiveDateTime>,
     pub overlaps: Vec<(NaiveDateTime, i32, i32)>,
+    /// From this local time on the offset is the second value (a one-way DST switch).
+    pub switch: Option<(NaiveDateTime, i32)>,
 }
 pub fn dt(y: i32, m: u32, d: u32, h: u32, min: u32) -> NaiveDateTime {
     NaiveDate::from_ymd_opt(y, m, d).unwrap().and_hms_opt(h, min, 0).unwrap()
@@ -87,10 +89,14 @@ impl FakeWall {
         Self::at(dt(2026, 11, 15, 10, 0), 19_800)
     }
     pub fn at(now: NaiveDateTime, offset_secs: i32) -> Arc<Self> {
-        Arc::new(FakeWall { now: Mutex::new(now), offset_secs, gaps: vec![], overlaps: vec![] })
+        Arc::new(FakeWall { now: Mutex::new(now), offset_secs, gaps: vec![], overlaps: vec![], switch: None })
     }
     pub fn with_dst(now: NaiveDateTime, offset_secs: i32, gaps: Vec<NaiveDateTime>, overlaps: Vec<(NaiveDateTime, i32, i32)>) -> Arc<Self> {
-        Arc::new(FakeWall { now: Mutex::new(now), offset_secs, gaps, overlaps })
+        Arc::new(FakeWall { now: Mutex::new(now), offset_secs, gaps, overlaps, switch: None })
+    }
+    /// Offset `before` until local time `at`, then `after` (no gap or overlap modelled).
+    pub fn with_switch(now: NaiveDateTime, before: i32, at: NaiveDateTime, after: i32) -> Arc<Self> {
+        Arc::new(FakeWall { now: Mutex::new(now), offset_secs: before, gaps: vec![], overlaps: vec![], switch: Some((at, after)) })
     }
     fn utc(local: NaiveDateTime, offset: i32) -> DateTime<Utc> {
         DateTime::from_naive_utc_and_offset(local - CDuration::seconds(offset as i64), Utc)
@@ -107,7 +113,8 @@ impl WallClock for FakeWall {
         if let Some((_, early, late)) = self.overlaps.iter().find(|o| o.0 == local) {
             return LocalResult::Ambiguous(Self::utc(local, *early), Self::utc(local, *late));
         }
-        LocalResult::Single(Self::utc(local, self.offset_secs))
+        let offset = self.switch.filter(|s| local >= s.0).map_or(self.offset_secs, |s| s.1);
+        LocalResult::Single(Self::utc(local, offset))
     }
 }
 

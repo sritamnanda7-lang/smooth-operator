@@ -206,6 +206,42 @@ fn a9_400_days_ahead_is_fine_one_minute_more_is_too_far() {
     assert_eq!(cal_url("T", "2030-01-01", "10:00", None, w.as_ref()), Err(Res::TooFar));
 }
 
+// ---------- instants, not wall clock (review of increment 1) ----------
+#[test]
+fn a9_the_400_day_limit_is_in_real_time_across_a_dst_change() {
+    // US Eastern: EDT (-4h) until 2026-11-01 02:00, then EST (-5h). now = 2026-10-20 10:00 EDT = 14:00Z.
+    // now + 400 days = 2027-11-24 14:00Z = 09:00 EST. Wall-clock gap to 10:00 that day is exactly 400 days, real gap 400 d + 1 h.
+    let w = FakeWall::with_switch(dt(2026, 10, 20, 10, 0), -14_400, dt(2026, 11, 1, 2, 0), -18_000);
+    assert!(cal_url("T", "2027-11-24", "08:59", None, w.as_ref()).is_ok(), "one minute before the limit");
+    assert!(cal_url("T", "2027-11-24", "09:00", None, w.as_ref()).is_ok(), "exactly now + 400 days of real time");
+    assert_eq!(cal_url("T", "2027-11-24", "09:01", None, w.as_ref()), Err(Res::TooFar), "one minute past the limit");
+    assert_eq!(cal_url("T", "2027-11-24", "10:00", None, w.as_ref()), Err(Res::TooFar), "wall-clock 400 days is 400 d + 1 h of real time");
+}
+
+#[test]
+fn a6_past_is_checked_on_instants_with_an_ambiguous_now_taken_as_the_later_instant() {
+    // 2026-11-01 01:15 and 01:30 each happen twice (EDT -4h, then EST -5h). now = 01:15 (taken as the LATER one = 06:15Z).
+    let overlaps = vec![(dt(2026, 11, 1, 1, 15), -14_400, -18_000), (dt(2026, 11, 1, 1, 30), -14_400, -18_000)];
+    let w = FakeWall::with_dst(dt(2026, 11, 1, 1, 15), -18_000, vec![], overlaps.clone());
+    // 'today 01:30' resolves to the earlier instant 05:30Z, which is before now (06:15Z): already past.
+    assert_eq!(cal_url("T", "today", "01:30", None, w.as_ref()), Err(Res::PastTime));
+    // positive control: an unambiguous later time is fine, and so is 01:30 when now is before the overlap.
+    assert!(cal_url("T", "today", "03:00", None, w.as_ref()).is_ok());
+    let early = FakeWall::with_dst(dt(2026, 11, 1, 0, 30), -14_400, vec![], overlaps);
+    assert!(cal_url("T", "today", "01:30", None, early.as_ref()).is_ok());
+}
+
+#[test]
+fn a7_minutes_outside_5_to_480_fail() {
+    let w = FakeWall::at(dt(2026, 11, 15, 10, 0), 0);
+    for m in [0u16, 1, 4, 481, 1000, u16::MAX] {
+        assert_eq!(cal_url("T", "tomorrow", "09:00", Some(m), w.as_ref()), Err(Res::Failed), "{m}");
+    }
+    for m in [5u16, 480] {
+        assert!(cal_url("T", "tomorrow", "09:00", Some(m), w.as_ref()).is_ok(), "{m}");
+    }
+}
+
 // ---------- command_for ties the pieces together ----------
 #[test]
 fn command_for_builds_the_three_commands_and_passes_time_errors_up() {
