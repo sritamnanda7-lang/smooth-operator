@@ -14,7 +14,9 @@ const YT = "https://www.youtube.com/results?search_query=Blinding+Lights";
 const cal = (text = "Review", d = dates(NOW + DAY), action = "TEMPLATE") => `https://calendar.google.com/calendar/render?action=${action}&text=${encodeURIComponent(text)}&dates=${d}`;
 const yt = (q: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
 const msg = (o: Record<string, unknown>) => ({ t: "cmd", v: 1, id: 7, ...o });
-const bad = (o: unknown, id: number | undefined = 7) => {
+// `want` is the id the link must get back; null means "no id" (an explicit undefined would trigger a default).
+const bad = (o: unknown, want: number | null = 7) => {
+  const id = want ?? undefined;
   const r = parseCmd(o as never, NOW) as { ok: boolean; id?: number };
   expect(r.ok, JSON.stringify(o)).toBe(false);
   expect(r.id, `id for ${JSON.stringify(o)}`).toBe(id);
@@ -83,12 +85,12 @@ describe("E1 parseCmd rejects, and keeps a valid id", () => {
     bad({ t: "cmd", v: 1, id: 7 });
   });
   it("bad ids give no id back", () => {
-    for (const id of [0, -1, 1.5, "1", null, 2147483648, NaN, undefined, [], {}]) bad({ t: "cmd", v: 1, id, op: "docs_open" }, undefined);
+    for (const id of [0, -1, 1.5, "1", null, 2147483648, NaN, undefined, [], {}]) bad({ t: "cmd", v: 1, id, op: "docs_open" }, null);
     expect((parseCmd({ t: "cmd", v: 1, id: 2147483647, op: "docs_open" } as never, NOW) as any).ok).toBe(true);
     expect((parseCmd({ t: "cmd", v: 1, id: 1, op: "docs_open" } as never, NOW) as any).ok).toBe(true);
   });
   it("not an object at all", () => {
-    for (const o of [null, undefined, 5, "x", []]) bad(o, undefined);
+    for (const o of [null, undefined, 5, "x", []]) bad(o, null);
   });
   it("YouTube: scheme, host, port, credentials, hash, path, keys, lengths, control characters", () => {
     const cases: [string, string][] = [

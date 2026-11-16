@@ -346,11 +346,12 @@ describe("E9 one job at a time, cancel", () => {
     r.tasks.cancel(99);
     await r.time.advance(1000);
     expect(a.box.out, "an unknown id must not cancel the job").toBeUndefined();
+    const scansBefore = r.sim.scripts("ytScan").length;
     r.tasks.cancel(5);
     await r.time.advance(500);
     await a.p;
     expect(a.box.out?.r).toBe("cancelled");
-    expect(r.time.now()).toBeLessThan(2500);
+    expect(r.sim.scripts("ytScan").length - scansBefore, "at most one more poll after cancel (within one poll)").toBeLessThanOrEqual(1);
   });
   it("cancelAll ends it as cancelled", async () => {
     const r = rig();
