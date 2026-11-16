@@ -9,6 +9,11 @@ api.anthropic.com
 generativelanguage.googleapis.com
 platform.claude.com
 aistudio.google.com
+# step 6: URLs the app hands to Chrome (never fetched by the app). `host@file` = only in that file, https only.
+www.youtube.com@desktop/src-tauri/src/so/exec/ops.rs
+calendar.google.com@desktop/src-tauri/src/so/exec/ops.rs
+# debug-only fake brain sample plan (an open_url step; not a network call)
+example.com@desktop/src-tauri/src/so/brain/fake.rs
 # local/dev and XML/schema namespaces (not network calls)
 localhost
 127.0.0.1

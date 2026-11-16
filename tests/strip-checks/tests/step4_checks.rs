@@ -202,6 +202,18 @@ fn urls_in(line: &str) -> Vec<(String, String)> {
 }
 
 #[test]
+fn s02_the_fake_exception_is_narrow() {
+    // The exception in s02 is (file ends so/brain/fake.rs) + https + example.com; mirror it so a loosening shows here.
+    let ok = |f: &str, s: &str, h: &str| f.ends_with("so/brain/fake.rs") && s == "https" && h == "example.com";
+    assert!(ok("x/so/brain/fake.rs", "https", "example.com"));
+    assert!(!ok("x/so/brain/gemini.rs", "https", "example.com"), "another file");
+    assert!(!ok("x/so/brain/fake.rs", "http", "example.com"), "http");
+    assert!(!ok("x/so/brain/fake.rs", "https", "evil.example"), "another host");
+    let src = fs::read_to_string(p("tests/strip-checks/tests/step4_checks.rs")).unwrap();
+    assert!(src.contains("host == \"example.com\""));
+}
+
+#[test]
 fn s02_the_url_scanner_can_fail() {
     assert_eq!(urls_in("let u = \"http://evil.example/x\";"), vec![("http".to_string(), "evil.example".to_string())]);
     assert_eq!(urls_in("\"https://api.anthropic.com/v1/messages\""), vec![("https".to_string(), "api.anthropic.com".to_string())]);
@@ -244,6 +256,11 @@ fn s02_only_the_four_hosts_all_https_and_no_key_in_a_url() {
     let mut bad = vec![];
     for (f, i, l) in brain_code(None) {
         for (scheme, host) in urls_in(&l) {
+            // Step 6: the debug-only fake's sample open_url plan names example.com (never fetched). Exactly that host, https, that file.
+            let fake_sample = f.ends_with("so/brain/fake.rs") && scheme == "https" && host == "example.com";
+            if fake_sample {
+                continue;
+            }
             if scheme != "https" || !HOSTS.contains(&host.as_str()) {
                 bad.push(format!("{f}:{i}: {scheme}://{host}"));
             }
@@ -588,7 +605,8 @@ fn d6_step_3_and_earlier_test_files_are_unchanged_since_the_step_3_tag() {
     // mod.rs: one `mod` line per new test file. settings-ui.test.ts: V5's import allow-list gains "BrainSection"
     // (step 4 plan U8 adds BrainSection to GeneralPane, which the old list would reject).
     // step3_checks.rs: S3/R7 now diff the step-2..step-3 range only (step 4 legitimately changes those core files).
-    let allowed = ["desktop/src-tauri/src/so/tests/mod.rs", "tests/so/settings-ui.test.ts", "tests/strip-checks/tests/step3_checks.rs"];
+    // strip_checks.rs (step 6): t05 gains `host@file` scoped allowlist entries (see d6_strip_checks_edit_is_only_the_scoped_allowlist).
+    let allowed = ["desktop/src-tauri/src/so/tests/mod.rs", "tests/so/settings-ui.test.ts", "tests/strip-checks/tests/step3_checks.rs", "tests/strip-checks/tests/strip_checks.rs"];
     let bad: Vec<&String> = changed.iter().filter(|f| !allowed.contains(&f.as_str())).collect();
     assert!(bad.is_empty(), "earlier-step tests were edited or deleted: {bad:?}");
 }
@@ -604,6 +622,18 @@ fn d6_the_only_edit_to_settings_ui_test_is_the_allow_list_lines_of_steps_4_and_5
     assert_eq!(added.len(), 2, "settings-ui.test.ts may only gain the BrainSection and LinkSection allow-list lines: {added:?}");
     assert!(added[0].contains("\"BrainSection\","), "first added line: {}", added[0]);
     assert!(added[1].contains("\"LinkSection\","), "second added line: {}", added[1]);
+}
+
+#[test]
+fn d6_strip_checks_edit_is_only_the_scoped_allowlist() {
+    require_tag();
+    let o = git_top(&["diff", "-U0", BASE_TAG, "--", "tests/strip-checks/tests/strip_checks.rs"]);
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    let removed: Vec<&str> = out.lines().filter(|l| l.starts_with('-') && !l.starts_with("---")).collect();
+    assert!(removed.len() <= 8, "strip_checks.rs may only change the t05 allowlist parsing: {removed:?}");
+    for l in &removed {
+        assert!(l.contains("allow") || l.contains("ok(&h)") || l.contains("fn t05") || l.contains("collect") || l.contains("lines()") || l.contains("trim") || l.contains("filter") || l.contains("to_lowercase") || l.contains("read("), "unexpected removed line: {l}");
+    }
 }
 
 #[test]
