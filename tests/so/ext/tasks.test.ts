@@ -111,6 +111,81 @@ describe("E6 yt_play happy path", () => {
   });
 });
 
+describe("E6 stale-document guard compares origin + pathname + the one expected param", () => {
+  const OLD = "https://www.youtube.com/watch?v=OLDOLDOLD11";
+  /** `nav` ends the results navigation (and the watch navigation) at the given URLs; returns what happened. */
+  async function runWith(resultsUrl: string, watchUrl: string = WATCH) {
+    const r = rig();
+    r.sim.nav = (u) => ({ delay: 300, url: u === YT ? resultsUrl : u === WATCH ? watchUrl : u });
+    r.sim.script.ytScan = () => ({ s: "found", id: ID });
+    r.sim.script.ytPlayer = ({ now }) => ({ s: "playing", t: now / 1000 });
+    const out = await r.run(ytCmd(), 60_000);
+    return { r, out };
+  }
+  it("extra params, other encodings of the same value and the parser's own normalisation still match the results page", async () => {
+    for (const u of [`${YT}&sp=EgIQAQ%3D%3D`, "https://www.youtube.com/results?search_query=Blinding%20Lights", "https://www.youtube.com/results?pp=x&search_query=Blinding+Lights", "https://www.youtube.com:443/results?search_query=Blinding+Lights", "https://WWW.YOUTUBE.COM/results?search_query=Blinding+Lights"]) {
+      const { r } = await runWith(u);
+      expect(r.sim.scripts("ytScan").length, u).toBeGreaterThanOrEqual(1);
+    }
+  });
+  it("a different path, host, scheme, query value or key, case of the path, or the old document never match", async () => {
+    for (const u of [
+      "https://www.youtube.com/results/?search_query=Blinding+Lights",
+      "https://www.youtube.com/Results?search_query=Blinding+Lights",
+      "https://www.youtube.com/watch?search_query=Blinding+Lights",
+      "https://m.youtube.com/results?search_query=Blinding+Lights",
+      "http://www.youtube.com/results?search_query=Blinding+Lights",
+      "https://www.youtube.com/results?search_query=Other+Song",
+      "https://www.youtube.com/results?q=Blinding+Lights",
+      "https://www.youtube.com/results",
+      OLD,
+    ]) {
+      const { r, out } = await runWith(u);
+      expect(r.sim.scripts("ytScan").length, `${u} must not be scanned`).toBe(0);
+      expect(out.r, u).not.toBe("playing");
+    }
+  });
+  it("the watch page: extra params match; another id, path, host or the results page do not", async () => {
+    for (const w of [`${WATCH}&t=5s`, `${WATCH}&pp=abc`, `https://www.youtube.com/watch?pp=abc&v=${ID}`]) {
+      const { r, out } = await runWith(YT, w);
+      expect(r.sim.scripts("ytPlayer").length, w).toBeGreaterThanOrEqual(1);
+      expect(out.r, w).toBe("playing");
+    }
+    for (const w of ["https://www.youtube.com/watch?v=BBBBBBBBBBB", `https://www.youtube.com/shorts/${ID}`, `https://m.youtube.com/watch?v=${ID}`, `https://www.youtube.com/watch?x=${ID}`, `https://www.youtube.com/watch/?v=${ID}`, YT, OLD]) {
+      const { r, out } = await runWith(YT, w);
+      expect(r.sim.scripts("ytPlayer").length, `${w} must not be polled`).toBe(0);
+      expect(out.r, w).not.toBe("playing");
+    }
+  });
+});
+
+describe("E6 empty results are no_video only after about 2 s of continuous emptiness", () => {
+  it("none from the start: no_video, not before 2 s (time-based, not poll-count based)", async () => {
+    const r = rig();
+    healthy(r);
+    r.sim.script.ytScan = ({ tab }) => (tab.url === YT ? { s: "none" } : { s: "wait" });
+    const out = await r.run(ytCmd(), 60_000);
+    expect(out.r).toBe("no_video");
+    expect(out.ms).toBeGreaterThanOrEqual(2000);
+    expect(out.ms).toBeLessThanOrEqual(5000);
+    const scans = r.sim.scripts("ytScan");
+    const first = Math.min(...scans.map((c) => c.at));
+    expect(Math.max(...scans.map((c) => c.at)) - first, "continuous emptiness lasted about 2 s").toBeGreaterThanOrEqual(1800);
+  });
+  it("a result that appears at 1.5 s is found and plays", async () => {
+    const r = rig();
+    healthy(r);
+    r.sim.script.ytScan = ({ tab, now }) => (tab.url !== YT ? { s: "wait" } : now < 1500 ? { s: "none" } : { s: "found", id: ID });
+    expect((await r.run(ytCmd(), 60_000)).r).toBe("playing");
+  });
+  it("a wait in between resets the emptiness (the page re-rendered): still found later", async () => {
+    const r = rig();
+    healthy(r);
+    r.sim.script.ytScan = ({ tab, now }) => (tab.url !== YT ? { s: "wait" } : now < 1000 ? { s: "none" } : now < 1400 ? { s: "wait" } : now < 3200 ? { s: "none" } : { s: "found", id: ID });
+    expect((await r.run(ytCmd(), 60_000)).r).toBe("playing");
+  });
+});
+
 describe("E6 yt_play outcomes", () => {
   it("an ad first, then the video: playing", async () => {
     const r = rig();

@@ -2,6 +2,8 @@
 // Step 6 E1: chrome-extension/lib/cmd.js. Everything the app sends as a command is untrusted until `parseCmd` accepts it.
 // Rules: exact origin and path, no credentials/hash/port, exact query keys in order, lengths in CODE POINTS, no control
 // characters, calendar dates in a window. A bad command with a valid id still returns that id (the link answers bad_cmd).
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { checkCalUrl, checkYtUrl, cpLen, parseCmd } from "../../../chrome-extension/lib/cmd.js";
 
@@ -221,5 +223,33 @@ describe("E1 parseCmd rejects, and keeps a valid id", () => {
       bad(msg({ op: "cal_open", url: u }));
     }
     expect(checkCalUrl(5 as never, NOW)).toBe(false);
+  });
+});
+
+// Round trip with the Rust builders: tests/so/fixtures/url-roundtrip.json holds the exact URLs `exec::ops` produced
+// (exec_ops_tests.rs a10 fails if Rust drifts from it; this block fails if the extension rejects or alters them).
+describe("round trip with the Rust-built URLs", () => {
+  const fx = JSON.parse(readFileSync(join(import.meta.dirname, "..", "fixtures", "url-roundtrip.json"), "utf8")) as { now_utc_ms: number; items: { input: string; yt: string; cal: string }[] };
+  it("has the hostile and international inputs", () => {
+    expect(fx.items.length).toBeGreaterThanOrEqual(10);
+    expect(fx.items.some((i) => i.input.includes("\u2028")) && fx.items.some((i) => i.input.startsWith(" ")) && fx.items.some((i) => [...i.input].length === 100)).toBe(true);
+  });
+  it("every yt URL passes, and the decoded query is exactly the input", () => {
+    for (const it of fx.items) {
+      expect(new URL(it.yt).href, it.input).toBe(it.yt);
+      expect(checkYtUrl(it.yt), `check ${JSON.stringify(it.input)}`).toBe(true);
+      const r = parseCmd(msg({ op: "yt_play", url: it.yt }), fx.now_utc_ms) as any;
+      expect(r.ok, `parse ${JSON.stringify(it.input)}`).toBe(true);
+      expect(r.cmd.query, "the query round-trips unchanged").toBe(it.input);
+    }
+  });
+  it("every cal URL passes with the Rust clock, and the title round-trips", () => {
+    for (const it of fx.items) {
+      expect(new URL(it.cal).href, it.input).toBe(it.cal);
+      expect(checkCalUrl(it.cal, fx.now_utc_ms), `check ${JSON.stringify(it.input)}`).toBe(true);
+      const r = parseCmd(msg({ op: "cal_open", url: it.cal }), fx.now_utc_ms) as any;
+      expect(r.ok, `parse ${JSON.stringify(it.input)}`).toBe(true);
+      expect(new URL(it.cal).searchParams.get("text")).toBe(it.input);
+    }
   });
 });

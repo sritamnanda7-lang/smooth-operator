@@ -48,3 +48,5 @@ mod exec_risk_tests;
 mod exec_tests;
 mod exec_seam_tests;
 mod link_cmd_tests;
+#[cfg(target_os = "macos")]
+mod exec_real_link_tests;
