@@ -23,6 +23,8 @@ ignore = [
   { id = "RUSTSEC-2026-0368", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
   { id = "RUSTSEC-2026-0369", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
   { id = "RUSTSEC-2026-0429", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
+  { id = "RUSTSEC-2026-0545", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
+  { id = "RUSTSEC-2026-0548", reason = "Same as RUSTSEC-2026-0367 (zip via the spike-only updater)." },
 ]
 
 [licenses]
