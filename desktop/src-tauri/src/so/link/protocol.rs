@@ -25,6 +25,78 @@ pub enum ExtMsg {
     Pair { code: String },
     Auth { proof: String, cnonce: String },
     Ping,
+    /// "res": keys t,v,id,r,ms only (step 6). No string field.
+    Result { id: u32, r: ResultCode, ms: u32 },
+}
+
+/// The 14 result codes the extension may answer with (step 6). Never page text, titles, URLs or ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultCode {
+    Playing,
+    Ad,
+    Paused,
+    NoVideo,
+    EditorOpen,
+    NeedsLogin,
+    Consent,
+    NoAccess,
+    Timeout,
+    BadCmd,
+    Busy,
+    Unsafe,
+    Cancelled,
+    Error,
+}
+
+/// A command for the extension (step 6). URLs are built by `exec::ops`, never from page data.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Command {
+    YtPlay { url: String },
+    DocsOpen,
+    CalOpen { url: String },
+}
+
+pub const MAX_CMD_ID: u32 = 2_147_483_647;
+pub const MAX_RESULT_MS: u32 = 120_000;
+
+/// `{"t":"cmd","v":1,"id":N,"op":...}`. Built by serde_json, so quotes and backslashes in a URL are escaped.
+pub fn cmd_json(id: u32, c: &Command) -> String {
+    use serde_json::json;
+    let v = VERSION;
+    match c {
+        Command::YtPlay { url } => json!({"t":"cmd","v":v,"id":id,"op":"yt_play","url":url}),
+        Command::DocsOpen => json!({"t":"cmd","v":v,"id":id,"op":"docs_open"}),
+        Command::CalOpen { url } => json!({"t":"cmd","v":v,"id":id,"op":"cal_open","url":url}),
+    }
+    .to_string()
+}
+
+/// `{"t":"cancel","v":1,"id":N}`.
+pub fn cancel_json(id: u32) -> String {
+    serde_json::json!({"t":"cancel","v":VERSION,"id":id}).to_string()
+}
+
+impl ResultCode {
+    /// Exactly the 14 fixed names; anything else (also other case) is refused.
+    fn from_name(s: &str) -> Option<Self> {
+        Some(match s {
+            "playing" => Self::Playing,
+            "ad" => Self::Ad,
+            "paused" => Self::Paused,
+            "no_video" => Self::NoVideo,
+            "editor_open" => Self::EditorOpen,
+            "needs_login" => Self::NeedsLogin,
+            "consent" => Self::Consent,
+            "no_access" => Self::NoAccess,
+            "timeout" => Self::Timeout,
+            "bad_cmd" => Self::BadCmd,
+            "busy" => Self::Busy,
+            "unsafe" => Self::Unsafe,
+            "cancelled" => Self::Cancelled,
+            "error" => Self::Error,
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +121,7 @@ pub fn parse_ext(text: &str, max: usize) -> Result<Untrusted<ExtMsg>, BadMsg> {
         Some("ping") => &["t", "v"],
         Some("pair") => &["t", "v", "code"],
         Some("auth") => &["t", "v", "proof", "cnonce"],
+        Some("res") => &["t", "v", "id", "r", "ms"],
         _ => return Err(BadMsg::UnknownType),
     };
     if obj.keys().any(|k| !allowed.contains(&k.as_str())) {
@@ -73,6 +146,16 @@ pub fn parse_ext(text: &str, max: usize) -> Result<Untrusted<ExtMsg>, BadMsg> {
                 return Err(BadMsg::BadField);
             }
             ExtMsg::Auth { proof: proof.to_string(), cnonce: cnonce.to_string() }
+        }
+        Some("res") => {
+            // as_u64 refuses negatives, floats, strings and null.
+            let num = |name: &str| obj.get(name).and_then(|v| v.as_u64()).and_then(|n| u32::try_from(n).ok()).ok_or(BadMsg::BadField);
+            let (id, ms) = (num("id")?, num("ms")?);
+            let r = ResultCode::from_name(field("r")?).ok_or(BadMsg::BadField)?;
+            if !(1..=MAX_CMD_ID).contains(&id) || ms > MAX_RESULT_MS {
+                return Err(BadMsg::BadField);
+            }
+            ExtMsg::Result { id, r, ms }
         }
         _ => ExtMsg::Ping,
     };

@@ -201,6 +201,20 @@ fn urls_in(line: &str) -> Vec<(String, String)> {
     out
 }
 
+/// The one URL s02 lets through besides the four hosts: the debug-only fake's sample open_url plan.
+fn fake_sample_ok(file: &str, scheme: &str, host: &str) -> bool {
+    file.ends_with("so/brain/fake.rs") && scheme == "https" && host == "example.com"
+}
+
+#[test]
+fn s02_the_fake_exception_is_narrow() {
+    let ok = fake_sample_ok;
+    assert!(ok("x/so/brain/fake.rs", "https", "example.com"));
+    assert!(!ok("x/so/brain/gemini.rs", "https", "example.com"), "another file");
+    assert!(!ok("x/so/brain/fake.rs", "http", "example.com"), "http");
+    assert!(!ok("x/so/brain/fake.rs", "https", "evil.example"), "another host");
+}
+
 #[test]
 fn s02_the_url_scanner_can_fail() {
     assert_eq!(urls_in("let u = \"http://evil.example/x\";"), vec![("http".to_string(), "evil.example".to_string())]);
@@ -244,6 +258,10 @@ fn s02_only_the_four_hosts_all_https_and_no_key_in_a_url() {
     let mut bad = vec![];
     for (f, i, l) in brain_code(None) {
         for (scheme, host) in urls_in(&l) {
+            // Step 6: the debug-only fake's sample open_url plan names example.com (never fetched). Exactly that host, https, that file.
+            if fake_sample_ok(&f, &scheme, &host) {
+                continue;
+            }
             if scheme != "https" || !HOSTS.contains(&host.as_str()) {
                 bad.push(format!("{f}:{i}: {scheme}://{host}"));
             }
@@ -588,7 +606,8 @@ fn d6_step_3_and_earlier_test_files_are_unchanged_since_the_step_3_tag() {
     // mod.rs: one `mod` line per new test file. settings-ui.test.ts: V5's import allow-list gains "BrainSection"
     // (step 4 plan U8 adds BrainSection to GeneralPane, which the old list would reject).
     // step3_checks.rs: S3/R7 now diff the step-2..step-3 range only (step 4 legitimately changes those core files).
-    let allowed = ["desktop/src-tauri/src/so/tests/mod.rs", "tests/so/settings-ui.test.ts", "tests/strip-checks/tests/step3_checks.rs"];
+    // strip_checks.rs (step 6): t05 gains `host@file` scoped allowlist entries (see d6_strip_checks_edit_is_only_the_scoped_allowlist).
+    let allowed = ["desktop/src-tauri/src/so/tests/mod.rs", "tests/so/settings-ui.test.ts", "tests/strip-checks/tests/step3_checks.rs", "tests/strip-checks/tests/strip_checks.rs"];
     let bad: Vec<&String> = changed.iter().filter(|f| !allowed.contains(&f.as_str())).collect();
     assert!(bad.is_empty(), "earlier-step tests were edited or deleted: {bad:?}");
 }
@@ -605,6 +624,83 @@ fn d6_the_only_edit_to_settings_ui_test_is_the_allow_list_lines_of_steps_4_and_5
     assert!(added[0].contains("\"BrainSection\","), "first added line: {}", added[0]);
     assert!(added[1].contains("\"LinkSection\","), "second added line: {}", added[1]);
 }
+
+/// New-file line ranges (start, end inclusive) of every hunk of a `git diff -U0`. A pure deletion counts as the line it sits at and the next.
+fn hunk_ranges(diff: &str) -> Vec<(usize, usize)> {
+    let mut out = vec![];
+    for l in diff.lines().filter(|l| l.starts_with("@@")) {
+        let plus = l.split_whitespace().find(|w| w.starts_with('+')).unwrap_or("+0");
+        let (c, d) = plus[1..].split_once(',').map_or((plus[1..].parse().unwrap_or(0), 1usize), |(a, b)| (a.parse().unwrap_or(0), b.parse().unwrap_or(0)));
+        out.push((c, if d == 0 { c + 1 } else { c + d - 1 }));
+    }
+    out
+}
+/// 1-based (start, end) lines of `fn name`, including its leading attribute and doc lines, to its closing brace.
+fn fn_lines(src: &str, name: &str) -> (usize, usize) {
+    let lines: Vec<&str> = src.lines().collect();
+    let at = lines.iter().position(|l| l.contains(&format!("fn {name}("))).unwrap_or_else(|| panic!("fn {name} not found"));
+    let mut start = at;
+    while start > 0 && (lines[start - 1].trim_start().starts_with("#[") || lines[start - 1].trim_start().starts_with("///")) {
+        start -= 1;
+    }
+    let (mut depth, mut seen) = (0i32, false);
+    for (i, l) in lines.iter().enumerate().skip(at) {
+        for c in l.chars() {
+            match c {
+                '{' => {
+                    depth += 1;
+                    seen = true;
+                }
+                '}' => depth -= 1,
+                _ => {}
+            }
+        }
+        if seen && depth == 0 {
+            return (start + 1, i + 1);
+        }
+    }
+    panic!("unbalanced braces in fn {name}")
+}
+fn hunks_outside(diff: &str, allowed: &[(usize, usize)]) -> Vec<(usize, usize)> {
+    // Touching or overlapping allowed functions form one allowed block (a hunk may span two neighbours).
+    let mut sorted = allowed.to_vec();
+    sorted.sort();
+    let mut merged: Vec<(usize, usize)> = vec![];
+    for a in sorted {
+        match merged.last_mut() {
+            Some(m) if a.0 <= m.1 + 1 => m.1 = m.1.max(a.1),
+            _ => merged.push(a),
+        }
+    }
+    hunk_ranges(diff).into_iter().filter(|h| !merged.iter().any(|a| h.0 >= a.0 && h.1 <= a.1)).collect()
+}
+
+#[test]
+fn d6_the_strip_checks_guard_can_fail() {
+    let diff = "@@ -10,2 +12,3 @@\n+a\n@@ -50,1 +60,0 @@\n+b\n@@ -90 +100 @@\n-x\n+y\n";
+    assert_eq!(hunk_ranges(diff), vec![(12, 14), (60, 61), (100, 100)]);
+    assert_eq!(hunks_outside(diff, &[(10, 20), (60, 70)]), vec![(100, 100)], "a hunk outside the allowed functions is reported");
+    assert!(hunks_outside(diff, &[(10, 20), (60, 70), (100, 100)]).is_empty());
+    assert!(hunks_outside("@@ -1 +5,6 @@\n", &[(5, 7), (8, 10)]).is_empty(), "a hunk spanning two touching functions is fine");
+    assert_eq!(hunks_outside("@@ -1 +5,6 @@\n", &[(5, 7), (9, 10)]), vec![(5, 10)], "but not across a gap");
+    let src = "#[test]\nfn a() {\n    if x { }\n}\nfn b() {}\n";
+    assert_eq!(fn_lines(src, "a"), (1, 4));
+}
+
+#[test]
+fn d6_strip_checks_edit_is_only_the_scoped_allowlist() {
+    require_tag();
+    let rel = "tests/strip-checks/tests/strip_checks.rs";
+    let diff = String::from_utf8_lossy(&git_top(&["diff", "-U0", BASE_TAG, "--", rel]).stdout).to_string();
+    let src = fs::read_to_string(p(rel)).unwrap();
+    let allowed: Vec<(usize, usize)> = ["t05_network_hosts_allowlist", "scoped_ok", "t05_scoped_entries_can_fail"].iter().map(|n| fn_lines(&src, n)).collect();
+    let outside = hunks_outside(&diff, &allowed);
+    assert!(outside.is_empty(), "strip_checks.rs changed outside the t05 allowlist functions (new-file lines {outside:?}); allowed {allowed:?}");
+    let count = |c: char| diff.lines().filter(|l| l.starts_with(c) && !l.starts_with("+++") && !l.starts_with("---")).count();
+    assert_eq!((count('+'), count('-')), (ADDED_LINES, REMOVED_LINES), "the exact edit size is pinned: a new line anywhere (even inside t05) needs a reviewer");
+}
+const ADDED_LINES: usize = 17;
+const REMOVED_LINES: usize = 2;
 
 #[test]
 fn d6_the_only_edit_to_tests_mod_rs_is_added_mod_lines() {

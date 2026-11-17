@@ -5,7 +5,8 @@
   "description": "Connects Chrome to the Smooth Operator app on this computer.",
   "minimum_chrome_version": "116",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxubEOBRmHA94RngcaM2soZIj0gs1q/ysVeBOoNfXJ2HlTz4lSSkedrEKoONzGJR8DK0vTeRO5lgb4fDhw+kRDRgSpixLzAmymVO+8VVbUFKx1Y52PPP/8uXO8a5mt3mScR8KvtPBlvlVz411Vmw5OuxzBjTMFFcmU4HuQnTnZI+rA/EpeqcuKijTxslXfnxDJU7cesRrhYYUA1IsGMRYI6AVLCRd64//y+qvFbaPhrSeEPuQGclu4KOBwUK2inRC1ngI+XCyNVpz8s4Sndfoy0Ho9FtGXaHPrMk/DeeinPN31bcBqwa8KRReqDMLHxUSM9uxzLeMZyUrrIToZnibfQIDAQAB",
-  "permissions": ["storage", "alarms"],
+  "permissions": ["storage", "alarms", "scripting"],
+  "host_permissions": ["https://www.youtube.com/*", "https://docs.google.com/*", "https://calendar.google.com/*"],
   "background": { "service_worker": "sw.js", "type": "module" },
   "action": { "default_popup": "popup.html", "default_title": "Smooth Operator" }
 }

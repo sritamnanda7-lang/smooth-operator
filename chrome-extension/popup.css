@@ -2,3 +2,4 @@
 body { width: 280px; margin: 12px; font: 13px system-ui, sans-serif; }
 #status.fix { color: #b00020; font-weight: 600; }
 #digits { width: 8em; font: 16px ui-monospace, monospace; letter-spacing: 0.2em; }
+:root { color-scheme: light dark; }

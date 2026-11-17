@@ -224,14 +224,29 @@ fn hosts_in(line: &str) -> Vec<String> {
     }
     out
 }
+/// `host@path` entries: the host is allowed only in that exact file and only as `https://host`.
+fn scoped_ok(scoped: &[(String, String)], file: &str, host: &str, line: &str) -> bool {
+    scoped.iter().any(|(h, f)| h == host && f == file) && line.to_lowercase().contains(&format!("https://{host}"))
+        && !line.to_lowercase().contains(&format!("http://{host}"))
+}
+#[test]
+fn t05_scoped_entries_can_fail() {
+    let s = vec![("www.youtube.com".to_string(), "a/ops.rs".to_string())];
+    assert!(scoped_ok(&s, "a/ops.rs", "www.youtube.com", "const X = \"https://www.youtube.com/results\";"));
+    assert!(!scoped_ok(&s, "a/other.rs", "www.youtube.com", "\"https://www.youtube.com/\""), "another file");
+    assert!(!scoped_ok(&s, "a/ops.rs", "www.youtube.com", "\"http://www.youtube.com/\""), "http");
+    assert!(!scoped_ok(&s, "a/ops.rs", "evil.example", "\"https://evil.example/\""), "another host");
+}
 #[test]
 fn t05_network_hosts_allowlist() {
-    let allow: Vec<String> = read("tests/net-allowlist.txt")
+    let entries: Vec<String> = read("tests/net-allowlist.txt")
         .lines()
         .map(str::trim)
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .map(str::to_lowercase)
         .collect();
+    let allow: Vec<String> = entries.iter().filter(|e| !e.contains('@')).cloned().collect();
+    let scoped: Vec<(String, String)> = entries.iter().filter_map(|e| e.split_once('@').map(|(h, f)| (h.to_string(), f.to_string()))).collect();
     let ok = |h: &str| allow.iter().any(|a| h == a || h.ends_with(&format!(".{a}")));
     let mut bad = vec![];
     let mut targets: Vec<PathBuf> = vec![];
@@ -263,7 +278,7 @@ fn t05_network_hosts_allowlist() {
                 continue;
             }
             for h in hosts_in(line) {
-                if !ok(&h) {
+                if !ok(&h) && !scoped_ok(&scoped, &r, &h, line) {
                     bad.push(format!("{r}:{}: host {h}", i + 1));
                 }
             }

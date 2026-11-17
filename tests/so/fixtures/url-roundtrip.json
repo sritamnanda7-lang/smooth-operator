@@ -1,0 +1,61 @@
+{
+  "items": [
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Blinding+Lights&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "Blinding Lights",
+      "yt": "https://www.youtube.com/results?search_query=Blinding+Lights"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=a%26b%3Dc%23d%2525%2F%3Fx&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "a&b=c#d%25/?x",
+      "yt": "https://www.youtube.com/results?search_query=a%26b%3Dc%23d%2525%2F%3Fx"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=100%25+%2B+%7E%21*%27%28%29+%22quoted%22+%5C+back&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "100% + ~!*'() \"quoted\" \\ back",
+      "yt": "https://www.youtube.com/results?search_query=100%25+%2B+%7E%21*%27%28%29+%22quoted%22+%5C+back"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞𝄞",
+      "yt": "https://www.youtube.com/results?search_query=%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E%F0%9D%84%9E"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=%E6%BC%A2%E5%AD%97%E3%81%8B%E3%81%AA%E4%BA%A4%E3%81%98%E3%82%8A%E6%96%87+%ED%95%9C%EA%B5%AD%EC%96%B4&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "漢字かな交じり文 한국어",
+      "yt": "https://www.youtube.com/results?search_query=%E6%BC%A2%E5%AD%97%E3%81%8B%E3%81%AA%E4%BA%A4%E3%81%98%E3%82%8A%E6%96%87+%ED%95%9C%EA%B5%AD%EC%96%B4"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=%F0%9F%91%A8%E2%80%8D%F0%9F%91%A9%E2%80%8D%F0%9F%91%A7%E2%80%8D%F0%9F%91%A6+family&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "👨‍👩‍👧‍👦 family",
+      "yt": "https://www.youtube.com/results?search_query=%F0%9F%91%A8%E2%80%8D%F0%9F%91%A9%E2%80%8D%F0%9F%91%A7%E2%80%8D%F0%9F%91%A6+family"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=line%E2%80%A8sep&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "line sep",
+      "yt": "https://www.youtube.com/results?search_query=line%E2%80%A8sep"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=nb%C2%A0space&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "nb space",
+      "yt": "https://www.youtube.com/results?search_query=nb%C2%A0space"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=+leading+space&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": " leading space",
+      "yt": "https://www.youtube.com/results?search_query=+leading+space"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=x%26add%3Devil%40x.com%26dates%3D1%2F2%23f&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "x&add=evil@x.com&dates=1/2#f",
+      "yt": "https://www.youtube.com/results?search_query=x%26add%3Devil%40x.com%26dates%3D1%2F2%23f"
+    },
+    {
+      "cal": "https://calendar.google.com/calendar/render?action=TEMPLATE&text=Beyonc%C3%A9+%E2%80%94+Halo&dates=20261116T093000Z%2F20261116T103000Z",
+      "input": "Beyoncé — Halo",
+      "yt": "https://www.youtube.com/results?search_query=Beyonc%C3%A9+%E2%80%94+Halo"
+    }
+  ],
+  "note": "generated by exec_ops_tests::a10_generate_roundtrip_fixture; wall = UTC+05:30, now 2026-11-15 10:00, tomorrow 15:00",
+  "now_utc_ms": 1794717000000
+}

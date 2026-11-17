@@ -281,7 +281,7 @@ fn opt_number(args: &Map<String, Value>, key: &str, lo: u64, hi: u64) -> Result<
     }
 }
 
-const WEEKDAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+pub(crate) const WEEKDAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 fn date_arg(s: &str) -> Result<String, Reject> {
     let lower = s.to_ascii_lowercase();
@@ -402,7 +402,59 @@ pub fn risk_of(a: &Action) -> Risk {
     match a {
         Action::DocsNew { .. } => Risk::Approve,
         Action::CalendarNewEvent { guests, .. } if !guests.is_empty() => Risk::Approve,
-        _ => Risk::Safe,
+        Action::OpenApp { .. }
+        | Action::SwitchApp { .. }
+        | Action::Media { .. }
+        | Action::OpenUrl { .. }
+        | Action::WebSearch { .. }
+        | Action::YoutubePlay { .. }
+        | Action::CalendarNewEvent { .. } => Risk::Safe,
+    }
+}
+
+/// One thing the executor does for a step (step 6). A step is a list of these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpKind {
+    AppOpen,
+    AppSwitch,
+    MediaKey,
+    YoutubePlay,
+    DocsOpen,
+    DocsPaste,
+    CalendarOpen,
+    CalendarSave,
+    OpenUrl,
+    WebSearch,
+}
+
+/// The fixed op list per action.
+pub fn ops_of(a: &Action) -> &'static [OpKind] {
+    use OpKind::*;
+    match a {
+        Action::OpenApp { .. } => &[AppOpen],
+        Action::SwitchApp { .. } => &[AppSwitch],
+        Action::Media { .. } => &[MediaKey],
+        Action::OpenUrl { .. } => &[OpenUrl],
+        Action::WebSearch { .. } => &[WebSearch],
+        Action::YoutubePlay { .. } => &[YoutubePlay],
+        Action::DocsNew { .. } => &[DocsOpen, DocsPaste],
+        Action::CalendarNewEvent { .. } => &[CalendarOpen, CalendarSave],
+    }
+}
+
+/// Risk of one op: DocsPaste Approve, CalendarSave = `risk_of(a)`, all others Safe.
+pub fn op_risk(op: OpKind, a: &Action) -> Risk {
+    match op {
+        OpKind::DocsPaste => Risk::Approve,
+        OpKind::CalendarSave => risk_of(a),
+        OpKind::AppOpen
+        | OpKind::AppSwitch
+        | OpKind::MediaKey
+        | OpKind::YoutubePlay
+        | OpKind::DocsOpen
+        | OpKind::CalendarOpen
+        | OpKind::OpenUrl
+        | OpKind::WebSearch => Risk::Safe,
     }
 }
 
@@ -442,7 +494,7 @@ fn fit(prefix: &str, body: &str, suffix: &str) -> String {
     format!("{prefix}{body}{suffix}")
 }
 
-fn step_line(a: &Action) -> String {
+pub(crate) fn step_line(a: &Action) -> String {
     let plural = |n: usize| if n == 1 { "" } else { "s" };
     match a {
         Action::OpenApp { name } => fit("Open app: ", name, ""),

@@ -271,7 +271,8 @@ pub fn force_stop(seq: u64) -> bool {
     STARTER.send(Msg::ForceStop(seq))
 }
 
-/// Ask the watcher to stop (the app is quitting).
+/// The app is quitting: stop the watcher and any running task (the process exit also closes the link socket).
 pub fn shutdown() {
+    crate::so::exec::stop_running();
     let _ = STARTER.send(Msg::Shutdown);
 }

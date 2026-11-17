@@ -4,7 +4,7 @@
 // sends is untrusted until it parses and, for auth_ok, carries the right proof.
 import { ALARM, ALARM_MIN, PING_MS, WS_URL } from "./config.js";
 import { delayFor } from "./backoff.js";
-import { authMsg, isCode, isHex64, pairMsg, parseApp, pingMsg } from "./protocol.js";
+import { authMsg, isCode, isHex64, pairMsg, parseApp, pingMsg, R, resMsg } from "./protocol.js";
 import { clientProof, eqHex, newNonce, serverProof } from "./proof.js";
 import { next, S } from "./state.js";
 
@@ -13,7 +13,7 @@ const OPEN = 1;
 
 /** @returns {{stop: () => void}} */
 export function startLink(env) {
-  const { chrome, WebSocket, setTimeout, setInterval, clearTimeout, clearInterval } = env;
+  const { chrome, WebSocket, setTimeout, setInterval, clearTimeout, clearInterval, tasks } = env;
   const store = chrome.storage.local;
   let state = S.UNPAIRED;
   let retryS;
@@ -40,6 +40,7 @@ export function startLink(env) {
     stopPing();
     const rec = cur;
     cur = null;
+    if (rec) tasks?.cancelAll(); // a job belongs to the socket that asked for it
     try {
       rec?.ws.close();
     } catch {
@@ -62,6 +63,7 @@ export function startLink(env) {
   const onEnd = (rec, ev) => {
     if (stopped || rec !== cur) return;
     cur = null;
+    tasks?.cancelAll();
     void dispatch(ev);
   };
 
@@ -126,6 +128,26 @@ export function startLink(env) {
     }
   }
 
+  function send(rec, text) {
+    if (stopped || rec !== cur || rec.ws.readyState !== OPEN) return;
+    try {
+      rec.ws.send(text);
+    } catch {
+      // closed: handled by its close event
+    }
+  }
+
+  /** The answer goes back only on the socket that asked, and only while it is still the current one. */
+  async function runCmd(rec, cmd) {
+    let out;
+    try {
+      out = await tasks.run(cmd);
+    } catch {
+      out = { r: R.error, ms: 0 };
+    }
+    send(rec, resMsg(cmd.id, out.r, out.ms));
+  }
+
   function sendPing() {
     if (!cur || cur.ws.readyState !== OPEN || state !== S.CONNECTED) return stopPing();
     try {
@@ -157,8 +179,16 @@ export function startLink(env) {
     }
     const parsed = parseApp(data);
     const reject = () => void dispatch({ type: "rejected" });
-    if (!parsed.ok) return reject();
+    const live = state === S.CONNECTED && rec.gotHello && tasks !== undefined; // commands only after auth
+    if (!parsed.ok) {
+      // A bad command with a usable id gets a bad_cmd answer; without one it is ignored. The link stays up.
+      if (!parsed.cmd || !live) return reject();
+      if (parsed.id !== undefined) send(rec, resMsg(parsed.id, R.bad_cmd, 0));
+      return;
+    }
     const m = parsed.msg;
+    if (m.t === "cmd") return live ? void runCmd(rec, m) : reject();
+    if (m.t === "cancel") return live ? tasks.cancel(m.id) : reject();
     if (m.t === "pong") return state === S.CONNECTED ? undefined : reject();
     if (m.state === "hello") {
       if (rec.gotHello) return reject();
