@@ -51,11 +51,14 @@ jobs:
         working-directory: desktop/src-tauri
         run: cargo deny check
 
+      # GHSA-fc5q-39xc-vjpf: picomatch ReDoS via vitest > vite > tinyglobby (dev only, never shipped,
+      # input is our own test globs). No patched release exists; drop when picomatch > 4.0.7 lands.
       - name: bun audit (repo root)
-        run: bun audit
+        run: bun audit --ignore=GHSA-fc5q-39xc-vjpf
 
+      # GHSA-fc5q-39xc-vjpf: same picomatch advisory as above (desktop lockfile).
       # GHSA-g3hv-75wg-m249: minimatch DoS in eslint tooling (dev only, never shipped,
       # input is our own lint globs). Revisit when typescript-eslint moves to minimatch 11.
       - name: bun audit (desktop)
         working-directory: desktop
-        run: bun audit --ignore=GHSA-g3hv-75wg-m249
+        run: bun audit --ignore=GHSA-g3hv-75wg-m249 --ignore=GHSA-fc5q-39xc-vjpf
