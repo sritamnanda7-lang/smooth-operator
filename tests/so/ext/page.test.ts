@@ -20,7 +20,9 @@ const video = (id: string, extra = "") =>
 const lockup = (id: string) => `<yt-lockup-view-model><div class="yt-lockup-view-model"><a class="yt-lockup-view-model__content-image" href="/watch?v=${id}"></a></div></yt-lockup-view-model>`;
 const ad = (id: string) => `<ytd-ad-slot-renderer><div><a href="/watch?v=${id}">Sponsored</a></div></ytd-ad-slot-renderer>`;
 const shorts = (id: string) => `<ytd-reel-shelf-renderer><div><a href="/shorts/${id}">short</a></div></ytd-reel-shelf-renderer>`;
-const mix = (id: string) => `<ytd-video-renderer><a href="/watch?v=${id}&list=RD${id}&start_radio=1">Mix</a></ytd-video-renderer>`;
+// Real playlist (list=PL...): skipped. A radio mix (list=RD...) is a normal result; see the "live-shaped" tests below.
+const mix = (id: string) => `<ytd-video-renderer><a href="/watch?v=${id}&list=PL${id}">Playlist</a></ytd-video-renderer>`;
+const radio = (id: string, tail = "&start_radio=1") => `<ytd-video-renderer><div><ytd-thumbnail><a id="thumbnail" href="/watch?v=${id}&list=RD${id}${tail}"></a></ytd-thumbnail><h3><a id="video-title" href="/watch?v=${id}&list=RD${id}${tail}&pp=abc">T</a></h3></div></ytd-video-renderer>`;
 const live = (id: string) =>
   `<ytd-video-renderer><a href="/watch?v=${id}"></a><ytd-badge-supported-renderer><div class="badge badge-style-type-live-now"><span>LIVE</span></div></ytd-badge-supported-renderer><ytd-thumbnail-overlay-time-status-renderer overlay-style="LIVE"></ytd-thumbnail-overlay-time-status-renderer></ytd-video-renderer>`;
 const results = (items: string) =>
@@ -54,9 +56,26 @@ describe("E4 ytScan", () => {
     setPage(results(shorts("SHORTSID123") + video(ID(5))));
     expect(scan(SEL, Q)).toEqual({ s: "found", id: ID(5) });
   });
-  it("Mix / playlist (list=) is skipped", () => {
+  it("a real playlist (list=PL) is skipped", () => {
     setPage(results(mix(ID(6)) + video(ID(7))));
     expect(scan(SEL, Q)).toEqual({ s: "found", id: ID(7) });
+  });
+  it("live-shaped results: ad first, then list=RD radio-mix items (&start_radio=1, &pp=): first non-ad id", () => {
+    setPage(results(ad(ID(1)) + radio(ID(2)) + radio(ID(3), "&pp=xyz")));
+    expect(scan(SEL, Q)).toEqual({ s: "found", id: ID(2) });
+  });
+  it("list=RD is ok, list=PL is skipped, next RD item chosen", () => {
+    setPage(results(mix(ID(4)) + radio(ID(5)) + radio(ID(6))));
+    expect(scan(SEL, Q)).toEqual({ s: "found", id: ID(5) });
+  });
+  it("list=UU and other non-RD playlists are skipped too", () => {
+    const uu = `<ytd-video-renderer><a href="/watch?v=${ID(7)}&list=UU123">x</a></ytd-video-renderer>`;
+    setPage(results(uu + radio(ID(8))));
+    expect(scan(SEL, Q)).toEqual({ s: "found", id: ID(8) });
+  });
+  it("only real-playlist links: none", () => {
+    setPage(results(mix(ID(4)) + mix(ID(5))));
+    expect(scan(SEL, Q)).toEqual({ s: "none" });
   });
   it("a live stream is skipped", () => {
     setPage(results(live(ID(8)) + video(ID(9))));

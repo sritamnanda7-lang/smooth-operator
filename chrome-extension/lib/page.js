@@ -29,7 +29,8 @@ export function ytScan(sel, expectedQuery) {
     for (const a of anchors) {
       const href = a.getAttribute("href") || "";
       const m = /^\/watch\?v=([A-Za-z0-9_-]{11})(&|$)/.exec(href);
-      if (!m || /[?&]list=/.test(href)) continue;
+      // Skip real playlists only; live results carry list=RD... (radio mix) on normal videos.
+      if (!m || /[?&]list=(?!RD)/.test(href)) continue;
       const item = a.closest(sel.item);
       if (!item || item.closest(sel.skip) || item.querySelector(sel.live)) continue;
       return { s: "found", id: m[1] };
