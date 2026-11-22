@@ -213,21 +213,41 @@ fn parse_plan(steps: Option<&Value>) -> Result<BrainOutput, Reject> {
     Ok(BrainOutput::Plan(out))
 }
 
-fn parse_action(name: Option<&Value>, args: Option<&Value>) -> Result<Action, Reject> {
-    let name = name.and_then(Value::as_str).unwrap_or("");
-    let allowed: &[&str] = match name {
+/// Every arg name the schema offers (the model gets one shared `args` object). Order = log key index.
+const KNOWN_ARGS: [&str; 11] = ["name", "key", "url", "query", "topic", "words", "title", "date", "time", "minutes", "guests"];
+
+fn allowed_args(action: &str) -> Option<&'static [&'static str]> {
+    Some(match action {
         "open_app" | "switch_app" => &["name"],
         "media" => &["key"],
         "open_url" => &["url"],
         "web_search" | "youtube_play" => &["query"],
         "docs_new" => &["topic", "words"],
         "calendar_new_event" => &["title", "date", "time", "minutes", "guests"],
-        _ => return Err(Reject::UnknownAction),
+        _ => return None,
+    })
+}
+
+/// First arg key that is not the action's own and not a harmless leftover: a known name of another action
+/// holding an empty value (null, "", [], 0) is ignored, because Gemini fills the shared object with blanks.
+fn stray_arg<'a>(args: &'a Map<String, Value>, allowed: &[&str]) -> Option<&'a String> {
+    args.iter().find_map(|(k, v)| {
+        let empty = matches!(v, Value::Null) || v.as_str() == Some("") || v.as_array().is_some_and(Vec::is_empty) || v.as_u64() == Some(0);
+        (!allowed.contains(&k.as_str()) && !(KNOWN_ARGS.contains(&k.as_str()) && empty)).then_some(k)
+    })
+}
+
+fn parse_action(name: Option<&Value>, args: Option<&Value>) -> Result<Action, Reject> {
+    let name = name.and_then(Value::as_str).unwrap_or("");
+    let Some(allowed) = allowed_args(name) else {
+        return Err(Reject::UnknownAction);
     };
     let Some(Value::Object(args)) = args else {
         return Err(Reject::BadArgs);
     };
-    only_keys(args, allowed)?;
+    if stray_arg(args, allowed).is_some() {
+        return Err(Reject::UnknownField);
+    }
     let text = |k: &str, max: usize| text_arg(args, k, max);
     Ok(match name {
         "open_app" => Action::OpenApp { name: text("name", 40)? },
@@ -393,6 +413,31 @@ fn host_ok(host: &str) -> bool {
 fn split_authority(rest: &str) -> (&str, &str) {
     let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     rest.split_at(end)
+}
+
+/// Where the first unknown field is, for the log: `(at, key)`. `at` 0 none, 1 top, 2 step, 3 args;
+/// `key` index into `KNOWN_ARGS`, 99 other, 0 unless `at` is 3.
+pub fn unknown_field_at(raw: &str) -> (u8, u8) {
+    let Ok(Strict(Value::Object(top))) = serde_json::from_str::<Strict>(raw) else {
+        return (0, 0);
+    };
+    let own: &[&str] = if top.get("kind").and_then(Value::as_str) == Some("question") { &["v", "kind", "question"] } else { &["v", "kind", "steps"] };
+    if only_keys(&top, own).is_err() {
+        return (1, 0);
+    }
+    for step in top.get("steps").and_then(Value::as_array).into_iter().flatten() {
+        let Value::Object(step) = step else { continue };
+        if only_keys(step, &["action", "args"]).is_err() {
+            return (2, 0);
+        }
+        let allowed = step.get("action").and_then(Value::as_str).and_then(allowed_args);
+        if let (Some(allowed), Some(Value::Object(args))) = (allowed, step.get("args")) {
+            if let Some(k) = stray_arg(args, allowed) {
+                return (3, KNOWN_ARGS.iter().position(|n| n == k).map_or(99, |i| i as u8));
+            }
+        }
+    }
+    (0, 0)
 }
 
 // ---------- risk and codes ----------

@@ -10,3 +10,8 @@
 pub fn brain(outcome: u8, provider: u8, ms: u64, steps: u8, http: u16, reject: u8, actions: &[u8]) {
     log::info!("brain outcome={outcome} provider={provider} ms={ms} steps={steps} http={http} reject={reject} actions={actions:?}");
 }
+
+/// Where a reject=5 hit (see `plan::unknown_field_at`). Integers only.
+pub fn unknown_field(at: u8, field: u8) {
+    log::info!("brain unknown_field at={at} field={field}");
+}
