@@ -508,5 +508,5 @@ fn t8_inner() {
     crate::so::brain::metrics::unknown_field(3, 5);
     let recs: Vec<String> = captured().into_iter().filter(|r| r.contains("unknown_field")).collect();
     assert_eq!(recs.len(), 1, "{recs:?}");
-    assert!(recs[0].ends_with("brain unknown_field at=3 key=5"), "{}", recs[0]);
+    assert!(recs[0].ends_with("brain unknown_field at=3 field=5"), "{}", recs[0]);
 }
