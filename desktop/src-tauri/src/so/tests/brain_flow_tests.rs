@@ -493,3 +493,20 @@ fn b_metrics_inner() {
         assert!(!low.contains("blinding") && !low.contains("youtube"), "plan or transcript text in {r}");
     }
 }
+
+#[test]
+fn t8_unknown_field_log_line_has_integers_only() {
+    run_isolated(module_path!(), "t8_inner");
+}
+#[test]
+#[ignore]
+fn t8_inner() {
+    if !in_child() {
+        return;
+    }
+    install_capture();
+    crate::so::brain::metrics::unknown_field(3, 5);
+    let recs: Vec<String> = captured().into_iter().filter(|r| r.contains("unknown_field")).collect();
+    assert_eq!(recs.len(), 1, "{recs:?}");
+    assert!(recs[0].ends_with("brain unknown_field at=3 key=5"), "{}", recs[0]);
+}

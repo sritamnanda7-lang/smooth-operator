@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: FSL-1.1-MIT
 //! Step 4 plan tests J1-J14 (pure: parse, risk, render, schemas). Numbers follow draft/step-4-plan.md.
 use crate::so::brain::plan::{
-    action_code, parse, render, risk_of, schema_for, schema_json, Action, BrainOutput, MediaArg, Reject, Risk, MAX_REPLY_BYTES,
+    action_code, parse, render, risk_of, schema_for, schema_json, unknown_field_at, Action, BrainOutput, MediaArg, Reject, Risk, MAX_REPLY_BYTES,
 };
 use crate::so::brain::provider::ProviderId;
 use crate::so::panel::{Kind, PanelPayload};
@@ -731,4 +731,76 @@ fn j14_gemini_schema_is_flat_without_one_of() {
     names.sort();
     names.dedup();
     assert_eq!(names.len(), 8, "{names:?}");
+}
+
+// ---------- unknown-field fix (draft/brain-unknownfield-fix-plan.md) T1-T7 ----------
+#[test]
+fn t1_empty_values_of_other_actions_known_args_are_ignored_in_calendar() {
+    let raw = cal(json!({"name": "", "query": null, "words": 0, "topic": "", "guests": [], "url": [], "key": null}));
+    let (a, r) = ok1(&raw);
+    assert_eq!(
+        a,
+        Action::CalendarNewEvent { title: "Review".into(), date: "tomorrow".into(), time: "15:00".into(), minutes: None, guests: vec![] }
+    );
+    assert_eq!(r, Risk::Safe);
+}
+
+#[test]
+fn t2_non_empty_other_action_key_is_still_rejected() {
+    assert_eq!(rej(&cal(json!({"name": "Review"}))), Reject::UnknownField);
+}
+
+#[test]
+fn t3_unknown_name_is_rejected_even_when_empty() {
+    assert_eq!(rej(&one("open_app", json!({"name": "x", "extra": ""}))), Reject::UnknownField);
+    assert_eq!(rej(&one("open_app", json!({"name": "x", "note": null}))), Reject::UnknownField);
+}
+
+#[test]
+fn t4_non_empty_known_keys_on_open_app_are_rejected() {
+    assert_eq!(rej(&one("open_app", json!({"name": "x", "words": 5}))), Reject::UnknownField);
+    assert_eq!(rej(&one("open_app", json!({"name": "x", "guests": ["a@b.co"]}))), Reject::UnknownField);
+}
+
+#[test]
+fn t9_near_empty_values_still_reject() {
+    for (k, v) in [("words", json!(0.0)), ("words", json!("0")), ("query", json!(" ")), ("url", json!({})), ("title", json!(false))] {
+        assert_eq!(rej(&one("open_app", json!({"name": "x", k: v.clone()}))), Reject::UnknownField, "{k}={v}");
+    }
+    // Raw JSON text: the json! macro cannot write -0.
+    let raw = r#"{"v":1,"kind":"plan","steps":[{"action":"open_app","args":{"name":"x","minutes":-0}}]}"#;
+    assert_eq!(rej(raw), Reject::UnknownField, "minutes:-0");
+}
+
+#[test]
+fn t5_strict_top_step_and_args_levels_keep_rejecting() {
+    let top = json!({"v": 1, "kind": "plan", "steps": [step("open_app", json!({"name": "x"}))], "note": ""}).to_string();
+    assert_eq!(rej(&top), Reject::UnknownField, "top, even empty");
+    let in_step = plan(vec![json!({"action": "open_app", "args": {"name": "x"}, "name": ""})]);
+    assert_eq!(rej(&in_step), Reject::UnknownField, "step, even a known name with empty value");
+    assert_eq!(rej(&one("open_app", json!({"name": "x", "extra": 1}))), Reject::UnknownField);
+    assert_eq!(rej(&one("media", json!({"key": "next", "times": 3}))), Reject::UnknownField);
+    let q = json!({"v": 1, "kind": "question", "question": "q?", "hint": ""}).to_string();
+    assert_eq!(rej(&q), Reject::UnknownField);
+}
+
+#[test]
+fn t6_empty_value_of_an_own_optional_key_keeps_old_behavior() {
+    bad_args(&cal(json!({"minutes": 0})));
+    let (a, r) = ok1(&cal(json!({"guests": []})));
+    assert!(matches!(a, Action::CalendarNewEvent { ref guests, .. } if guests.is_empty()));
+    assert_eq!(r, Risk::Safe);
+}
+
+#[test]
+fn t7_unknown_field_at_reports_level_and_key_index() {
+    let top = json!({"v": 1, "kind": "plan", "steps": [step("open_app", json!({"name": "x"}))], "note": "hi"}).to_string();
+    assert_eq!(unknown_field_at(&top), (1, 0));
+    assert_eq!(unknown_field_at(&plan(vec![json!({"action": "open_app", "args": {"name": "x"}, "why": "b"})])), (2, 0));
+    assert_eq!(unknown_field_at(&one("open_app", json!({"name": "x", "extra": 1}))), (3, 99));
+    assert_eq!(unknown_field_at(&cal(json!({"name": "x"}))), (3, 0));
+    assert_eq!(unknown_field_at(&cal(json!({"query": "x"}))), (3, 3));
+    assert_eq!(unknown_field_at(&one("open_app", json!({"name": "x", "guests": ["a@b.co"]}))), (3, 10));
+    assert_eq!(unknown_field_at(&one("open_app", json!({"name": "x"}))), (0, 0));
+    assert_eq!(unknown_field_at("not json"), (0, 0));
 }

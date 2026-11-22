@@ -176,7 +176,13 @@ impl Brain {
     /// Parses and checks the reply; the code (never the model) sets risk and the panel lines.
     fn reply_outcome(&self, raw: &str) -> Outcome {
         match plan::parse(raw) {
-            Err(r) => bad_reply(r),
+            Err(r) => {
+                if r == Reject::UnknownField {
+                    let (at, key) = plan::unknown_field_at(raw);
+                    metrics::unknown_field(at, key);
+                }
+                bad_reply(r)
+            }
             Ok(out) => {
                 let (code, steps, actions, plan) = match &out {
                     BrainOutput::Plan(steps) => (1, steps.len().min(255) as u8, steps.iter().map(|s| action_code(&s.action)).collect(), steps.clone()),
